@@ -1,0 +1,24 @@
+name: Architecture proposal
+description: Propose or change an architectural decision
+title: "[Architecture]: "
+labels: ["architecture"]
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What problem or constraint requires a decision?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed decision
+    validations:
+      required: true
+  - type: textarea
+    id: consequences
+    attributes:
+      label: Consequences and alternatives
+    validations:
+      required: true

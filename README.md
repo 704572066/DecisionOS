@@ -1,50 +1,43 @@
 # DecisionOS
 
-> Enterprise AI Decision Operating System · 企业 AI 决策操作系统
+> Enterprise Context Intelligence Platform · 企业上下文智能平台
 
-DecisionOS 是一套面向企业经营者、创业者与管理团队的企业级 AI 决策操作系统。它通过持续感知企业状态、建立统一业务上下文、积累企业长期记忆、执行多角色协同推理，并将决策转化为可追踪工作流，帮助组织持续提升决策质量。
+DecisionOS 面向企业经营者、创业者与管理团队，通过统一企业上下文、长期知识记忆和可追溯证据，为组织提供可解释、可执行、可复盘的决策支持。
 
-## 产品定位
+## 当前阶段
 
-DecisionOS 不是通用聊天机器人，也不替代 ERP、CRM、OA、财务或协同办公系统。它作为企业现有业务系统之上的智能决策层，连接数据、知识、人员、流程与模型，为决策者提供可解释、可执行、可复盘的决策支持。
-
-## 核心能力
-
-- 企业上下文理解
-- 企业知识与长期记忆
-- 多 Agent 协同分析
-- 决策建议与方案比较
-- 风险识别与持续预警
-- 决策模拟、回放与复盘
-- 会议决策提取与行动跟踪
-- 决策工作流编排与执行
+项目处于 **Repository v1.0 / Architecture Baseline** 阶段。产品边界、Context Engine、ContextObject 与 Knowledge Object Model 已形成初始基线，下一阶段进入 System Context 与 System Architecture。
 
 ## 文档入口
 
 - [文档中心](docs/README.md)
-- [DOC-000 产品定义说明书](docs/00-product/DOC-000_Product_Definition.md)
-- [项目路线图](ROADMAP.md)
-- [变更记录](CHANGELOG.md)
+- [路线图](ROADMAP.md)
 - [贡献指南](CONTRIBUTING.md)
-
-## 当前阶段
-
-项目当前处于 **产品定义与需求建模阶段**。当前工作的优先级是建立统一产品语言、明确产品边界、形成能力模型与 MVP 范围，再进入系统架构和研发设计。
+- [变更记录](CHANGELOG.md)
 
 ## 仓库结构
 
 ```text
 DecisionOS/
-├── docs/           # 产品、需求、架构和工程文档
-├── diagrams/       # 架构图、流程图、领域模型
-├── api/            # OpenAPI、接口示例和协议
-├── database/       # 数据模型、DDL 和迁移脚本
-├── prompts/        # Prompt、Agent 指令与评测集
-├── deployment/     # 部署配置与运维说明
-├── hardware/       # 可选硬件终端设计
-└── prototype/      # 原型、验证代码和实验
+├── docs/          # 产品、架构、规范、ADR 与图表
+├── schemas/       # JSON Schema 等机器可读契约
+├── examples/      # 可复用示例数据
+├── src/           # 后端、前端与 AI 服务实现
+├── api/           # 保留现有 API 设计资产
+├── database/      # 保留现有数据库设计资产
+├── deployment/    # 保留现有部署资产
+├── prompts/       # 保留现有 Prompt 与 Agent 资产
+├── hardware/      # 可选硬件设计
+└── prototype/     # 原型与验证代码
 ```
+
+## 核心原则
+
+- AI 提供 Evidence 与 Context，管理者负责最终决策。
+- ContextObject 是运行时上下文快照，不是业务实体。
+- Knowledge Object 是可引用、可追溯、可关联的长期业务对象。
+- 正式设计遵循 `Draft → Review → Approved → Deprecated` 生命周期。
 
 ## 状态声明
 
-本项目处于早期设计阶段。文档中的功能、技术方案和边界可能随着调研、原型验证与评审持续调整。
+项目仍处于早期设计阶段。未标记为 `Approved` 的内容可能随评审和原型验证调整。

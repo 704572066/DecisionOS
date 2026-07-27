@@ -1,0 +1,24 @@
+name: Repository Check
+
+on:
+  pull_request:
+  push:
+    branches: [master, main]
+
+jobs:
+  structure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check required files
+        shell: bash
+        run: |
+          set -e
+          for f in README.md ROADMAP.md CONTRIBUTING.md CHANGELOG.md docs/README.md; do
+            test -f "$f" || { echo "Missing $f"; exit 1; }
+          done
+      - name: Check Markdown links
+        uses: gaurav-nelson/github-action-markdown-link-check@v1
+        with:
+          use-quiet-mode: yes
+          folder-path: .

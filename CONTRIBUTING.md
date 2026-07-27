@@ -1,50 +1,32 @@
 # Contributing to DecisionOS
 
-## 基本原则
+## 1. Contribution flow
 
-1. Git 仓库是项目文档与设计的唯一事实来源。
-2. 重要产品或架构决策必须形成文档，不只保留在聊天或会议记录中。
-3. 每次提交应聚焦一个明确目标，避免混合无关修改。
-4. 未经评审的设想应标记为 Draft、Proposal 或 TBD。
-5. 涉及产品边界的内容必须与 DOC-000 保持一致。
+1. Create an Issue or reference an existing Issue.
+2. Create a focused branch.
+3. Update documents, contracts, examples and tests together when applicable.
+4. Submit a Pull Request using the repository template.
+5. Obtain review before changing an `Approved` specification.
 
-## 分支建议
+## 2. Document status
 
-当前早期阶段可直接使用 `master`。进入多人协作后建议采用：
+- `Draft`: work in progress.
+- `Review`: ready for architecture or product review.
+- `Approved`: frozen development baseline.
+- `Deprecated`: retained for traceability and linked to its replacement.
 
-- `master`：稳定、已评审内容
-- `feature/<topic>`：新功能或新文档
-- `docs/<topic>`：文档调整
-- `fix/<topic>`：错误修复
+## 3. Naming
 
-## Commit 规范
+- Product documents: existing numeric names are preserved.
+- Specifications: `Spec-NNN_Title.md`.
+- Architecture decisions: `ADR-NNNN-short-title.md`.
+- Fields and JSON properties: `lowerCamelCase`.
+- Object IDs: lowercase type prefix plus stable identifier, such as `meeting-000001`.
 
-```text
-<type>: <summary>
-```
+## 4. Change rules
 
-常用类型：
-
-- `docs`：文档内容
-- `feat`：新增能力或代码
-- `fix`：修复问题
-- `refactor`：重构但不改变外部行为
-- `chore`：仓库与工具维护
-- `test`：测试与评测
-
-示例：
-
-```text
-docs: initialize DecisionOS documentation structure
-docs: define product boundaries in DOC-000
-feat: add initial LLM gateway prototype
-```
-
-## 文档评审检查
-
-- 是否说明目标读者与文档目的
-- 是否使用统一术语
-- 是否明确范围、非目标与假设
-- 是否区分事实、决策、提案和待确认项
-- 是否包含可验证的验收条件或后续行动
-- 是否与上级文档存在冲突
+- Do not silently redefine terms owned by another approved document.
+- Reference `SPEC-001 ContextObject` rather than redefining ContextObject.
+- Reference `SPEC-002 Knowledge Object Model` for domain-object boundaries.
+- Breaking changes require an ADR and explicit migration notes.
+- Do not commit secrets, credentials, private customer data or model keys.
