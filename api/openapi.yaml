@@ -1,0 +1,51 @@
+openapi: 3.1.0
+info:
+  title: DecisionOS Demo API
+  version: 0.1.0
+paths:
+  /health:
+    get:
+      responses:
+        '200': {description: OK}
+  /api/demo/seed:
+    post:
+      responses:
+        '200': {description: Seeded}
+  /api/projects:
+    get:
+      responses:
+        '200': {description: Projects}
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object}
+      responses:
+        '200': {description: Created}
+  /api/meetings:
+    post:
+      responses:
+        '200': {description: Created}
+  /api/meetings/{meeting_id}/transcript:
+    post:
+      parameters:
+        - in: path
+          name: meeting_id
+          required: true
+          schema: {type: string}
+      responses:
+        '200': {description: Updated}
+  /api/meetings/{meeting_id}/analyze:
+    post:
+      parameters:
+        - in: path
+          name: meeting_id
+          required: true
+          schema: {type: string}
+      responses:
+        '200': {description: Context reminders}
+  /api/decisions:
+    post:
+      responses:
+        '200': {description: Created}

@@ -1,0 +1,42 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: decisionos
+      POSTGRES_USER: decisionos
+      POSTGRES_PASSWORD: decisionos
+    ports:
+      - "5432:5432"
+    volumes:
+      - decisionos_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U decisionos -d decisionos"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build: ./src/backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://decisionos:decisionos@db:5432/decisionos
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
+      CORS_ORIGINS: http://localhost:5173
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build: ./src/frontend
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+volumes:
+  decisionos_db:

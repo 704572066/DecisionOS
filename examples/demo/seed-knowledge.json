@@ -1,0 +1,13 @@
+{
+  "project": {"name": "客户A企业软件采购项目", "businessGoal": "在保证利润率的前提下完成签约"},
+  "documents": [
+    {"title": "历史同类客户成交复盘", "content": "去年同类型客户初始要求降价20%，最终成交折扣为8%。", "sourceType": "document"},
+    {"title": "客户A历史付款记录", "content": "客户A过去合同平均付款周期为90天，曾出现一次逾期。", "sourceType": "crm"},
+    {"title": "公司项目利润率规则", "content": "软件项目目标毛利率不得低于18%；超过10%的折扣必须评估付款周期。", "sourceType": "policy"}
+  ],
+  "evidence": [
+    {"title": "同类成交折扣", "factStatement": "同类项目最终成交折扣为8%。", "strength": "Strong"},
+    {"title": "客户付款周期风险", "factStatement": "客户A历史平均付款周期为90天。", "strength": "Verified"},
+    {"title": "利润率约束", "factStatement": "项目目标毛利率不得低于18%。", "strength": "Verified"}
+  ]
+}

@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"Decision","allOf":[{"$ref":"./common-object.schema.json"},{"type":"object","properties":{"projectId":{"type":"string"},"title":{"type":"string"},"content":{"type":"string"},"sourceType":{"type":"string"},"sourceId":{"type":"string"},"payload":{"type":"object","additionalProperties":true}}}]}
