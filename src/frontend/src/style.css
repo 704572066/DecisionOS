@@ -1,1 +1,81 @@
-:root{font-family:Inter,system-ui,sans-serif;background:#f5f6f8;color:#172033}body{margin:0}main{max-width:960px;margin:auto;padding:32px}header{margin-bottom:24px}header h1{margin:0;font-size:36px}section{background:white;border:1px solid #e3e7ef;border-radius:14px;padding:20px;margin:16px 0;box-shadow:0 4px 16px #00000008}textarea,select{width:100%;box-sizing:border-box;margin:10px 0;padding:12px;border:1px solid #cdd5e1;border-radius:8px}button{padding:10px 16px;margin:6px 8px 6px 0;border:0;border-radius:8px;background:#263b73;color:white;cursor:pointer}button:disabled{opacity:.45}article{border-left:4px solid #526aa5;background:#f7f9ff;padding:12px;margin:10px 0}article p{margin:8px 0}small{color:#667085}footer{position:sticky;bottom:12px;background:#172033;color:white;padding:12px 16px;border-radius:8px}
+:root {
+  font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  background: #f3f5f9;
+  color: #172033;
+  font-synthesis: none;
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+button, select, textarea { font: inherit; }
+main { max-width: 1280px; margin: auto; padding: 28px; }
+.hero {
+  display: flex; justify-content: space-between; align-items: center; gap: 24px;
+  padding: 28px; color: white; border-radius: 20px;
+  background: linear-gradient(135deg, #172554, #334e9b);
+  box-shadow: 0 16px 40px rgba(23, 37, 84, .18);
+}
+.eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; opacity: .75; }
+.hero h1 { margin: 8px 0 4px; font-size: 34px; }
+.hero p { margin: 0; opacity: .82; }
+.status {
+  display: flex; align-items: center; gap: 10px; min-width: 112px;
+  padding: 10px 14px; background: rgba(255,255,255,.12); border-radius: 999px;
+}
+.status span { width: 10px; height: 10px; border-radius: 50%; background: #a7b1c8; }
+.status.recording span { background: #ff5b5b; box-shadow: 0 0 0 6px rgba(255,91,91,.18); }
+section {
+  background: white; border: 1px solid #e3e7ef; border-radius: 16px;
+  padding: 20px; margin: 18px 0; box-shadow: 0 5px 20px rgba(17,24,39,.05);
+}
+section h2 { margin: 0 0 14px; font-size: 18px; }
+.toolbar { display: grid; grid-template-columns: auto minmax(260px, 1fr) auto; gap: 10px; align-items: center; }
+.mode-row { display: flex; gap: 14px; align-items: end; margin-top: 12px; }
+.mode-row label { flex: 1; color: #536076; font-size: 13px; }
+select, textarea {
+  width: 100%; padding: 11px 12px; border: 1px solid #ccd4e1; border-radius: 9px;
+  background: white; color: #172033;
+}
+button {
+  padding: 11px 16px; border: 0; border-radius: 9px;
+  background: #294582; color: white; cursor: pointer; font-weight: 600;
+}
+button:hover { filter: brightness(1.06); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.meeting-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(360px, .75fr); gap: 18px; }
+.meeting-grid section { margin: 0; min-height: 520px; }
+.panel-title { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.record-button { background: #b42318; }
+.stop-button { background: #344054; }
+.transcript {
+  height: 360px; overflow: auto; padding: 18px; border-radius: 12px;
+  background: #f8fafc; border: 1px solid #e4e9f0; line-height: 1.75;
+}
+.transcript p { margin: 0 0 10px; }
+.transcript .placeholder { color: #98a2b3; }
+.transcript .partial { color: #667085; font-style: italic; border-left: 3px solid #98a2b3; padding-left: 10px; }
+.manual-fallback { margin-top: 14px; }
+.manual-fallback summary { cursor: pointer; color: #536076; }
+.manual-fallback textarea { margin: 12px 0 6px; }
+.reminder-panel article {
+  border-left: 4px solid #526aa5; background: #f6f8ff;
+  padding: 14px; margin: 12px 0; border-radius: 0 10px 10px 0;
+}
+.reminder-panel article p { margin: 8px 0; line-height: 1.55; }
+small { color: #667085; }
+.empty-reminder {
+  padding: 24px; color: #667085; background: #f8fafc;
+  border: 1px dashed #cdd5e1; border-radius: 12px; line-height: 1.7;
+}
+.warning { color: #b54708; font-size: 13px; }
+footer {
+  position: sticky; bottom: 12px; margin-top: 18px;
+  background: #172033; color: white; padding: 12px 16px; border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(23,32,51,.18);
+}
+@media (max-width: 900px) {
+  main { padding: 14px; }
+  .hero { align-items: flex-start; flex-direction: column; }
+  .toolbar { grid-template-columns: 1fr; }
+  .meeting-grid { grid-template-columns: 1fr; }
+  .meeting-grid section { min-height: auto; }
+}

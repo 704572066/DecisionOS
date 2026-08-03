@@ -1,21 +1,28 @@
 from datetime import datetime
 from uuid import uuid4
-from sqlalchemy import DateTime, ForeignKey, String, Text
+
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
+
 from app.db.session import Base
+
 
 def uid(prefix: str) -> str:
     return f"{prefix}-{uuid4().hex[:12]}"
 
+
 class Project(Base):
     __tablename__ = "projects"
+
     id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: uid("project"))
     name: Mapped[str] = mapped_column(String(200))
     business_goal: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+
 class KnowledgeItem(Base):
     __tablename__ = "knowledge_items"
+
     id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: uid("knowledge"))
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
     object_type: Mapped[str] = mapped_column(String(40), index=True)
@@ -25,8 +32,10 @@ class KnowledgeItem(Base):
     source_id: Mapped[str] = mapped_column(String(100), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+
 class Meeting(Base):
     __tablename__ = "meetings"
+
     id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: uid("meeting"))
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
     title: Mapped[str] = mapped_column(String(240))
@@ -34,8 +43,26 @@ class Meeting(Base):
     status: Mapped[str] = mapped_column(String(40), default="in_progress")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+
+class MeetingTranscriptSegment(Base):
+    __tablename__ = "meeting_transcript_segments"
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: uid("segment"))
+    meeting_id: Mapped[str] = mapped_column(ForeignKey("meetings.id"), index=True)
+    sequence: Mapped[int] = mapped_column(Integer)
+    speaker: Mapped[str] = mapped_column(String(120), default="")
+    text: Mapped[str] = mapped_column(Text)
+    is_final: Mapped[bool] = mapped_column(Boolean, default=True)
+    start_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    end_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    asr_provider: Mapped[str] = mapped_column(String(60), default="browser")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class Decision(Base):
     __tablename__ = "decisions"
+
     id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: uid("decision"))
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
     meeting_id: Mapped[str | None] = mapped_column(ForeignKey("meetings.id"), nullable=True)
@@ -44,8 +71,10 @@ class Decision(Base):
     evidence_summary: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+
 class Task(Base):
     __tablename__ = "tasks"
+
     id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: uid("task"))
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
     decision_id: Mapped[str | None] = mapped_column(ForeignKey("decisions.id"), nullable=True)
