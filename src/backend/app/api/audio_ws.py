@@ -18,11 +18,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-async def send_json_safe(websocket: WebSocket, payload: dict) -> None:
+async def send_json_safe(websocket: WebSocket, payload: dict) -> bool:
     try:
         await websocket.send_json(payload)
-    except RuntimeError:
-        pass
+        return True
+    except (RuntimeError, WebSocketDisconnect):
+        return False
 
 
 async def persist_and_notify(
@@ -39,10 +40,13 @@ async def persist_and_notify(
     try:
         meeting = db.get(Meeting, meeting_id)
         if meeting is None:
-            await send_json_safe(websocket, {"type": "error", "message": "Meeting not found"})
+            await send_json_safe(
+                websocket,
+                {"type": "error", "message": "Meeting not found"},
+            )
             return
 
-        segment = append_final_segment(
+        append_result = append_final_segment(
             db,
             meeting=meeting,
             text=text,
@@ -51,10 +55,14 @@ async def persist_and_notify(
             start_ms=start_ms,
             end_ms=end_ms,
         )
+        segment = append_result.segment
+
         await send_json_safe(
             websocket,
             {
                 "type": "transcript.saved",
+                "created": append_result.created,
+                "replacedSegmentId": append_result.replaced_segment_id,
                 "segment": {
                     "id": segment.id,
                     "sequence": segment.sequence,
@@ -63,6 +71,10 @@ async def persist_and_notify(
                 },
             },
         )
+
+        # Exact duplicates do not need another reminder analysis.
+        if not append_result.created and append_result.replaced_segment_id is None:
+            return
 
         result = realtime_reminder_coordinator.analyze_if_due(db, meeting)
         if result and result["reminders"]:
@@ -78,57 +90,89 @@ async def persist_and_notify(
         db.close()
 
 
+async def receive_init(websocket: WebSocket) -> dict | None:
+    try:
+        init_raw = await asyncio.wait_for(websocket.receive_text(), timeout=10)
+        return json.loads(init_raw)
+    except asyncio.TimeoutError:
+        await send_json_safe(
+            websocket,
+            {"type": "error", "message": "语音连接初始化超时"},
+        )
+    except json.JSONDecodeError:
+        await send_json_safe(
+            websocket,
+            {"type": "error", "message": "缺少合法的初始化消息"},
+        )
+    return None
+
+
 @router.websocket("/api/meetings/{meeting_id}/audio-stream")
 async def meeting_audio_stream(websocket: WebSocket, meeting_id: str) -> None:
     await websocket.accept()
 
     db = SessionLocal()
-    meeting = db.get(Meeting, meeting_id)
-    db.close()
+    try:
+        meeting = db.get(Meeting, meeting_id)
+    finally:
+        db.close()
+
     if meeting is None:
-        await websocket.send_json({"type": "error", "message": "Meeting not found"})
-        await websocket.close(code=4404)
+        await send_json_safe(
+            websocket,
+            {"type": "error", "message": "Meeting not found"},
+        )
+        with suppress(RuntimeError):
+            await websocket.close(code=4404)
         return
 
-    try:
-        init_raw = await asyncio.wait_for(websocket.receive_text(), timeout=10)
-        init = json.loads(init_raw)
-    except (asyncio.TimeoutError, json.JSONDecodeError):
-        await websocket.send_json({"type": "error", "message": "缺少合法的初始化消息"})
-        await websocket.close(code=4400)
+    init = await receive_init(websocket)
+    if init is None:
+        with suppress(RuntimeError):
+            await websocket.close(code=4400)
         return
 
     mode = str(init.get("mode") or settings.asr_provider).lower()
     language = str(init.get("language") or settings.asr_language)
     mime_type = str(init.get("mimeType") or "audio/webm")
 
-    await websocket.send_json(
+    await send_json_safe(
+        websocket,
         {
             "type": "asr.ready",
             "mode": mode,
             "language": language,
             "mimeType": mime_type,
-        }
+        },
     )
 
-    # Browser mode uses Web Speech API in the frontend. Final text is sent as JSON.
     if mode == "browser":
         try:
             while True:
                 message = await websocket.receive()
                 if message.get("type") == "websocket.disconnect":
                     break
+
                 text_payload = message.get("text")
                 if not text_payload:
                     continue
-                payload = json.loads(text_payload)
+
+                try:
+                    payload = json.loads(text_payload)
+                except json.JSONDecodeError:
+                    await send_json_safe(
+                        websocket,
+                        {"type": "error", "message": "收到无效的语音事件"},
+                    )
+                    continue
+
                 event_type = payload.get("type")
                 if event_type == "transcript.partial":
-                    await websocket.send_json(payload)
+                    await send_json_safe(websocket, payload)
                 elif event_type == "transcript.final":
                     text = str(payload.get("text") or "").strip()
                     if text:
-                        await websocket.send_json(payload)
+                        await send_json_safe(websocket, payload)
                         await persist_and_notify(
                             websocket,
                             meeting_id=meeting_id,
@@ -136,54 +180,63 @@ async def meeting_audio_stream(websocket: WebSocket, meeting_id: str) -> None:
                             provider="browser",
                             confidence=payload.get("confidence"),
                         )
+                elif event_type == "session.ping":
+                    await send_json_safe(websocket, {"type": "session.pong"})
                 elif event_type == "session.stop":
                     break
         except WebSocketDisconnect:
-            return
+            logger.info("Browser ASR disconnected: meeting=%s", meeting_id)
+        except Exception:
+            logger.exception("Browser ASR session failed: meeting=%s", meeting_id)
+        finally:
+            with suppress(RuntimeError):
+                await websocket.close()
         return
 
-    # Provider mode forwards MediaRecorder binary chunks to a streaming ASR service.
+    provider = None
+    browser_task: asyncio.Task | None = None
+    provider_task: asyncio.Task | None = None
     try:
         provider = create_streaming_provider(mode)
         await provider.connect(mime_type=mime_type, language=language)
-    except Exception as exc:
-        logger.exception("ASR provider initialization failed")
-        await websocket.send_json({"type": "error", "message": f"ASR 初始化失败：{exc}"})
-        await websocket.close(code=1011)
-        return
 
-    async def receive_browser_audio() -> None:
-        while True:
-            message = await websocket.receive()
-            if message.get("type") == "websocket.disconnect":
-                break
-            audio = message.get("bytes")
-            if audio:
-                await provider.send_audio(audio)
-                continue
-            text_payload = message.get("text")
-            if text_payload:
+        async def receive_browser_audio() -> None:
+            while True:
+                message = await websocket.receive()
+                if message.get("type") == "websocket.disconnect":
+                    break
+
+                audio = message.get("bytes")
+                if audio:
+                    await provider.send_audio(audio)
+                    continue
+
+                text_payload = message.get("text")
+                if not text_payload:
+                    continue
                 payload = json.loads(text_payload)
                 if payload.get("type") == "session.stop":
                     break
+                if payload.get("type") == "session.ping":
+                    await send_json_safe(websocket, {"type": "session.pong"})
 
-    async def receive_asr_events() -> None:
-        async for event in provider.events():
-            await send_json_safe(websocket, event.as_message())
-            if event.is_final and event.text:
-                await persist_and_notify(
-                    websocket,
-                    meeting_id=meeting_id,
-                    text=event.text,
-                    provider=event.provider,
-                    confidence=event.confidence,
-                    start_ms=event.start_ms,
-                    end_ms=event.end_ms,
-                )
+        async def receive_asr_events() -> None:
+            async for event in provider.events():
+                await send_json_safe(websocket, event.as_message())
+                if event.is_final and event.text:
+                    await persist_and_notify(
+                        websocket,
+                        meeting_id=meeting_id,
+                        text=event.text,
+                        provider=event.provider,
+                        confidence=event.confidence,
+                        start_ms=event.start_ms,
+                        end_ms=event.end_ms,
+                    )
 
-    browser_task = asyncio.create_task(receive_browser_audio())
-    provider_task = asyncio.create_task(receive_asr_events())
-    try:
+        browser_task = asyncio.create_task(receive_browser_audio())
+        provider_task = asyncio.create_task(receive_asr_events())
+
         done, pending = await asyncio.wait(
             {browser_task, provider_task},
             return_when=asyncio.FIRST_COMPLETED,
@@ -193,7 +246,24 @@ async def meeting_audio_stream(websocket: WebSocket, meeting_id: str) -> None:
                 task.result()
         for task in pending:
             task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
+    except WebSocketDisconnect:
+        logger.info("Streaming ASR disconnected: meeting=%s", meeting_id)
+    except Exception as exc:
+        logger.exception("Streaming ASR failed: meeting=%s", meeting_id)
+        await send_json_safe(
+            websocket,
+            {"type": "error", "message": f"ASR 会话异常：{exc}"},
+        )
     finally:
-        await provider.close()
+        for task in (browser_task, provider_task):
+            if task and not task.done():
+                task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await task
+        if provider is not None:
+            with suppress(Exception):
+                await provider.close()
         with suppress(RuntimeError):
             await websocket.close()

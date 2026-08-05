@@ -4,6 +4,7 @@ import './style.css';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 const WS_BASE = import.meta.env.VITE_WS_BASE_URL || '';
+const SESSION_STORAGE_KEY = 'decisionos.currentMeeting.v1';
 
 type Project = {id: string; name: string; businessGoal: string};
 type Reminder = {
@@ -12,15 +13,31 @@ type Reminder = {
   source: {type: string; id: string};
   relevanceScore: number;
 };
+type MeetingDetails = {
+  id: string;
+  projectId: string;
+  title: string;
+  status: string;
+  transcript: string;
+  segments: Array<{
+    id: string;
+    sequence: number;
+    text: string;
+    confidence?: number;
+    provider: string;
+  }>;
+};
 type SpeechRecognitionLike = {
   lang: string;
   continuous: boolean;
   interimResults: boolean;
   start: () => void;
   stop: () => void;
+  abort?: () => void;
   onresult: ((event: any) => void) | null;
   onerror: ((event: any) => void) | null;
   onend: (() => void) | null;
+  onstart?: (() => void) | null;
 };
 
 declare global {
@@ -36,17 +53,50 @@ function buildWsUrl(path: string): string {
   return `${protocol}//${window.location.host}${path}`;
 }
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof DOMException) {
+    if (error.name === 'NotAllowedError') {
+      return '麦克风权限被拒绝，请在浏览器地址栏左侧允许麦克风访问。';
+    }
+    if (error.name === 'NotFoundError') {
+      return '未检测到可用麦克风。';
+    }
+    if (error.name === 'NotReadableError') {
+      return '麦克风正被其他程序占用。';
+    }
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
+function loadStoredSession(): {meetingId: string; projectId: string} | null {
+  try {
+    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed.meetingId || !parsed.projectId) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
 function App() {
+  const storedSession = useMemo(() => loadStoredSession(), []);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [projectId, setProjectId] = useState('');
-  const [meetingId, setMeetingId] = useState('');
+  const [projectId, setProjectId] = useState(storedSession?.projectId || '');
+  const [meetingId, setMeetingId] = useState(storedSession?.meetingId || '');
   const [finalTranscript, setFinalTranscript] = useState('');
   const [partialTranscript, setPartialTranscript] = useState('');
-  const [manualText, setManualText] = useState('客户要求整体价格下降18%，并希望付款周期延长到180天。');
+  const [manualText, setManualText] = useState(
+    '客户要求整体价格下降18%，并希望付款周期延长到180天。'
+  );
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [message, setMessage] = useState('');
+  const [messageType, setMessageType] = useState<'info'|'error'>('info');
   const [recording, setRecording] = useState(false);
-  const [connectionState, setConnectionState] = useState<'idle'|'connecting'|'connected'|'error'>('idle');
+  const [connectionState, setConnectionState] = useState<
+    'idle'|'connecting'|'connected'|'disconnected'|'error'
+  >('idle');
   const [asrMode, setAsrMode] = useState<'browser'|'deepgram'>('browser');
 
   const socketRef = useRef<WebSocket | null>(null);
@@ -54,86 +104,216 @@ function App() {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const shouldRestartRecognitionRef = useRef(false);
+  const recognitionStartingRef = useRef(false);
+  const recognitionRestartTimerRef = useRef<number | null>(null);
+  const heartbeatTimerRef = useRef<number | null>(null);
+  const intentionalSocketCloseRef = useRef(false);
+  const mountedRef = useRef(true);
 
   const browserSpeechSupported = useMemo(
     () => Boolean(window.SpeechRecognition || window.webkitSpeechRecognition),
     []
   );
 
-  const load = async () => {
-    const response = await fetch(`${API}/projects`);
-    if (!response.ok) throw new Error('项目加载失败');
-    const projectsData = await response.json();
-    setProjects(projectsData);
-    if (projectsData[0]) setProjectId((current: string) => current || projectsData[0].id);
+  const showInfo = (text: string) => {
+    setMessageType('info');
+    setMessage(text);
+  };
+
+  const showError = (text: string) => {
+    setMessageType('error');
+    setMessage(text);
+  };
+
+  const fetchJson = async <T,>(
+    input: RequestInfo | URL,
+    init?: RequestInit,
+  ): Promise<T> => {
+    const response = await fetch(input, init);
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(detail || `请求失败：HTTP ${response.status}`);
+    }
+    return response.json() as Promise<T>;
+  };
+
+  const persistMeetingSession = (nextMeetingId: string, nextProjectId: string) => {
+    localStorage.setItem(
+      SESSION_STORAGE_KEY,
+      JSON.stringify({meetingId: nextMeetingId, projectId: nextProjectId}),
+    );
+  };
+
+  const loadProjects = async () => {
+    const data = await fetchJson<Project[]>(`${API}/projects`);
+    if (!mountedRef.current) return;
+    setProjects(data);
+    if (data[0]) setProjectId((current) => current || data[0].id);
+  };
+
+  const restoreMeeting = async (targetMeetingId: string) => {
+    const data = await fetchJson<MeetingDetails>(
+      `${API}/meetings/${targetMeetingId}`,
+    );
+    if (!mountedRef.current) return;
+    setMeetingId(data.id);
+    setProjectId(data.projectId);
+    setFinalTranscript(data.transcript || '');
+    setPartialTranscript('');
+    persistMeetingSession(data.id, data.projectId);
+    showInfo(`已恢复会议：${data.title}`);
   };
 
   useEffect(() => {
-    load().catch((error) => setMessage(String(error)));
+    mountedRef.current = true;
+    const initialize = async () => {
+      try {
+        await loadProjects();
+        if (storedSession?.meetingId) {
+          await restoreMeeting(storedSession.meetingId);
+        }
+      } catch (error) {
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+        showError(`初始化失败：${getErrorMessage(error)}`);
+      }
+    };
+    initialize();
+
     return () => {
-      stopRecording();
+      mountedRef.current = false;
+      stopRecording(true);
     };
   }, []);
 
   const seed = async () => {
-    const response = await fetch(`${API}/demo/seed`, {method: 'POST'});
-    const data = await response.json();
-    setMessage(data.message);
-    await load();
-    setProjectId(data.projectId);
+    try {
+      const data = await fetchJson<{projectId: string; message: string}>(
+        `${API}/demo/seed`,
+        {method: 'POST'},
+      );
+      await loadProjects();
+      setProjectId(data.projectId);
+      showInfo(data.message);
+    } catch (error) {
+      showError(getErrorMessage(error));
+    }
   };
 
   const createMeeting = async () => {
-    const response = await fetch(`${API}/meetings`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({projectId, title: '客户商务谈判'}),
-    });
-    if (!response.ok) throw new Error('会议创建失败');
-    const data = await response.json();
-    setMeetingId(data.id);
-    setFinalTranscript('');
-    setPartialTranscript('');
-    setReminders([]);
-    setMessage(`会议已创建：${data.id}`);
+    try {
+      const data = await fetchJson<{
+        id: string;
+        projectId: string;
+        title: string;
+        transcript: string;
+      }>(`${API}/meetings`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({projectId, title: '客户商务谈判'}),
+      });
+      setMeetingId(data.id);
+      setFinalTranscript('');
+      setPartialTranscript('');
+      setReminders([]);
+      persistMeetingSession(data.id, data.projectId);
+      showInfo(`会议已创建：${data.id}`);
+    } catch (error) {
+      showError(getErrorMessage(error));
+    }
   };
 
   const handleSocketMessage = (event: MessageEvent) => {
-    const payload = JSON.parse(event.data);
-    switch (payload.type) {
-      case 'asr.ready':
-        setConnectionState('connected');
-        setMessage(`实时语音已连接：${payload.mode}`);
-        break;
-      case 'transcript.partial':
-        setPartialTranscript(payload.text || '');
-        break;
-      case 'transcript.final':
-        setPartialTranscript('');
-        break;
-      case 'transcript.saved':
-        setFinalTranscript((current) => [current, payload.segment.text].filter(Boolean).join('\n'));
-        break;
-      case 'reminder.batch':
-        setReminders((current) => [...payload.reminders, ...current].slice(0, 10));
-        setMessage(`发现 ${payload.reminders.length} 条历史提醒`);
-        break;
-      case 'error':
-        setConnectionState('error');
-        setMessage(payload.message || '语音服务发生错误');
-        break;
+    try {
+      const payload = JSON.parse(event.data);
+      switch (payload.type) {
+        case 'asr.ready':
+          setConnectionState('connected');
+          showInfo(`实时语音已连接：${payload.mode}`);
+          break;
+        case 'session.pong':
+          break;
+        case 'transcript.partial':
+          setPartialTranscript(payload.text || '');
+          break;
+        case 'transcript.final':
+          setPartialTranscript('');
+          break;
+        case 'transcript.saved':
+          if (payload.replacedSegmentId) {
+            restoreMeeting(meetingId).catch((error) =>
+              showError(`恢复转写失败：${getErrorMessage(error)}`)
+            );
+          } else if (payload.created) {
+            setFinalTranscript((current) =>
+              [current, payload.segment.text].filter(Boolean).join('\n')
+            );
+          }
+          break;
+        case 'reminder.batch':
+          setReminders((current) => {
+            const merged = [...payload.reminders, ...current];
+            const seen = new Set<string>();
+            return merged.filter((item) => {
+              const key = `${item.source.type}:${item.source.id}:${item.title}:${item.summary}`;
+              if (seen.has(key)) return false;
+              seen.add(key);
+              return true;
+            }).slice(0, 10);
+          });
+          showInfo(`发现 ${payload.reminders.length} 条历史提醒`);
+          break;
+        case 'error':
+          setConnectionState('error');
+          showError(payload.message || '语音服务发生错误');
+          break;
+      }
+    } catch (error) {
+      showError(`无法解析实时消息：${getErrorMessage(error)}`);
     }
+  };
+
+  const clearHeartbeat = () => {
+    if (heartbeatTimerRef.current !== null) {
+      window.clearInterval(heartbeatTimerRef.current);
+      heartbeatTimerRef.current = null;
+    }
+  };
+
+  const startHeartbeat = (socket: WebSocket) => {
+    clearHeartbeat();
+    heartbeatTimerRef.current = window.setInterval(() => {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({type: 'session.ping'}));
+      }
+    }, 20000);
   };
 
   const openSocket = async (): Promise<WebSocket> => {
     if (!meetingId) throw new Error('请先创建会议');
+
+    const existing = socketRef.current;
+    if (
+      existing &&
+      (existing.readyState === WebSocket.OPEN ||
+       existing.readyState === WebSocket.CONNECTING)
+    ) {
+      return existing;
+    }
+
     setConnectionState('connecting');
-    const socket = new WebSocket(buildWsUrl(`/api/meetings/${meetingId}/audio-stream`));
+    intentionalSocketCloseRef.current = false;
+    const socket = new WebSocket(
+      buildWsUrl(`/api/meetings/${meetingId}/audio-stream`)
+    );
     socket.binaryType = 'arraybuffer';
     socketRef.current = socket;
 
     await new Promise<void>((resolve, reject) => {
-      const timeout = window.setTimeout(() => reject(new Error('WebSocket 连接超时')), 10000);
+      const timeout = window.setTimeout(() => {
+        socket.close();
+        reject(new Error('WebSocket 连接超时'));
+      }, 10000);
+
       socket.onopen = () => {
         window.clearTimeout(timeout);
         socket.send(JSON.stringify({
@@ -150,16 +330,65 @@ function App() {
     });
 
     socket.onmessage = handleSocketMessage;
-    socket.onclose = () => {
-      setConnectionState('idle');
-      setRecording(false);
+    socket.onerror = () => {
+      setConnectionState('error');
+      showError('实时连接出现异常。');
     };
+    socket.onclose = () => {
+      clearHeartbeat();
+      socketRef.current = null;
+      if (intentionalSocketCloseRef.current) {
+        setConnectionState('idle');
+        return;
+      }
+      setConnectionState('disconnected');
+      setRecording(false);
+      shouldRestartRecognitionRef.current = false;
+      showError('实时连接已断开。会议内容已保存，可以点击“重新连接”。');
+    };
+    startHeartbeat(socket);
     return socket;
+  };
+
+  const cancelRecognitionRestart = () => {
+    if (recognitionRestartTimerRef.current !== null) {
+      window.clearTimeout(recognitionRestartTimerRef.current);
+      recognitionRestartTimerRef.current = null;
+    }
+  };
+
+  const safelyStartRecognition = (
+    recognition: SpeechRecognitionLike,
+    socket: WebSocket,
+  ) => {
+    if (
+      !shouldRestartRecognitionRef.current ||
+      socket.readyState !== WebSocket.OPEN ||
+      recognitionStartingRef.current
+    ) {
+      return;
+    }
+
+    recognitionStartingRef.current = true;
+    try {
+      recognition.start();
+    } catch {
+      recognitionStartingRef.current = false;
+      cancelRecognitionRestart();
+      recognitionRestartTimerRef.current = window.setTimeout(
+        () => safelyStartRecognition(recognition, socket),
+        700,
+      );
+    }
   };
 
   const startBrowserSpeech = (socket: WebSocket) => {
     const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!Recognition) throw new Error('当前浏览器不支持 Web Speech API，请使用 Chrome/Edge 或切换 Deepgram 模式');
+    if (!Recognition) {
+      throw new Error(
+        '当前浏览器不支持 Web Speech API，请使用 Chrome/Edge 或切换 Deepgram 模式'
+      );
+    }
 
     const recognition = new Recognition();
     recognition.lang = 'zh-CN';
@@ -167,44 +396,86 @@ function App() {
     recognition.interimResults = true;
     shouldRestartRecognitionRef.current = true;
 
+    recognition.onstart = () => {
+      recognitionStartingRef.current = false;
+    };
     recognition.onresult = (event: any) => {
       let partial = '';
-      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+      for (
+        let index = event.resultIndex;
+        index < event.results.length;
+        index += 1
+      ) {
         const result = event.results[index];
         const text = result[0]?.transcript?.trim() || '';
         if (!text) continue;
+
         if (result.isFinal) {
-          socket.send(JSON.stringify({
-            type: 'transcript.final',
-            text,
-            confidence: result[0]?.confidence,
-          }));
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({
+              type: 'transcript.final',
+              text,
+              confidence: result[0]?.confidence,
+            }));
+          }
         } else {
           partial += text;
         }
       }
-      if (partial) {
-        setPartialTranscript(partial);
-        socket.send(JSON.stringify({type: 'transcript.partial', text: partial}));
+
+      setPartialTranscript(partial);
+      if (partial && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
+          type: 'transcript.partial',
+          text: partial,
+        }));
       }
     };
     recognition.onerror = (event: any) => {
-      setMessage(`浏览器语音识别错误：${event.error || 'unknown'}`);
-      if (event.error === 'not-allowed') shouldRestartRecognitionRef.current = false;
-    };
-    recognition.onend = () => {
-      if (shouldRestartRecognitionRef.current && socket.readyState === WebSocket.OPEN) {
-        try { recognition.start(); } catch { /* ignore duplicate start */ }
+      recognitionStartingRef.current = false;
+      const errorCode = event.error || 'unknown';
+      if (errorCode === 'not-allowed' || errorCode === 'service-not-allowed') {
+        shouldRestartRecognitionRef.current = false;
+        showError('麦克风或语音识别权限被拒绝，请检查浏览器权限。');
+        setRecording(false);
+        return;
+      }
+      if (errorCode === 'audio-capture') {
+        shouldRestartRecognitionRef.current = false;
+        showError('未检测到麦克风，或麦克风正被其他程序占用。');
+        setRecording(false);
+        return;
+      }
+      if (errorCode !== 'no-speech' && errorCode !== 'aborted') {
+        showError(`浏览器语音识别错误：${errorCode}`);
       }
     };
-    recognition.start();
+    recognition.onend = () => {
+      recognitionStartingRef.current = false;
+      if (
+        !shouldRestartRecognitionRef.current ||
+        socket.readyState !== WebSocket.OPEN
+      ) {
+        return;
+      }
+      cancelRecognitionRestart();
+      recognitionRestartTimerRef.current = window.setTimeout(
+        () => safelyStartRecognition(recognition, socket),
+        500,
+      );
+    };
+
     recognitionRef.current = recognition;
+    safelyStartRecognition(recognition, socket);
   };
 
   const startDeepgramAudio = async (socket: WebSocket) => {
     if (!navigator.mediaDevices?.getUserMedia) {
-      throw new Error('浏览器无法访问麦克风，请确认使用 HTTPS');
+      throw new Error(
+        '浏览器无法访问麦克风，请使用 HTTPS 或配置 Chrome 不安全来源白名单'
+      );
     }
+
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         channelCount: 1,
@@ -215,17 +486,21 @@ function App() {
     });
     streamRef.current = stream;
 
-    const preferredMimeTypes = [
-      'audio/webm;codecs=opus',
-      'audio/webm',
-    ];
-    const mimeType = preferredMimeTypes.find((type) => MediaRecorder.isTypeSupported(type)) || '';
-    const recorder = new MediaRecorder(stream, mimeType ? {mimeType} : undefined);
+    const preferredMimeTypes = ['audio/webm;codecs=opus', 'audio/webm'];
+    const mimeType =
+      preferredMimeTypes.find((type) => MediaRecorder.isTypeSupported(type)) || '';
+    const recorder = new MediaRecorder(
+      stream,
+      mimeType ? {mimeType} : undefined,
+    );
+
     recorder.ondataavailable = async (event) => {
       if (event.data.size === 0 || socket.readyState !== WebSocket.OPEN) return;
       socket.send(await event.data.arrayBuffer());
     };
-    recorder.onerror = (event) => setMessage(`录音错误：${String(event)}`);
+    recorder.onerror = () => {
+      showError('浏览器录音发生错误。');
+    };
     recorder.start(300);
     recorderRef.current = recorder;
   };
@@ -242,17 +517,31 @@ function App() {
       setRecording(true);
     } catch (error) {
       setConnectionState('error');
-      setMessage(error instanceof Error ? error.message : String(error));
-      stopRecording();
+      showError(getErrorMessage(error));
+      stopRecording(true);
     }
   };
 
-  const stopRecording = () => {
+  function stopRecording(silent = false) {
     shouldRestartRecognitionRef.current = false;
-    try { recognitionRef.current?.stop(); } catch { /* no-op */ }
+    recognitionStartingRef.current = false;
+    cancelRecognitionRestart();
+
+    try {
+      recognitionRef.current?.stop();
+    } catch {
+      try {
+        recognitionRef.current?.abort?.();
+      } catch {
+        // no-op
+      }
+    }
     recognitionRef.current = null;
 
-    if (recorderRef.current && recorderRef.current.state !== 'inactive') {
+    if (
+      recorderRef.current &&
+      recorderRef.current.state !== 'inactive'
+    ) {
       recorderRef.current.stop();
     }
     recorderRef.current = null;
@@ -260,42 +549,62 @@ function App() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
 
+    clearHeartbeat();
     const socket = socketRef.current;
+    intentionalSocketCloseRef.current = true;
     if (socket?.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify({type: 'session.stop'}));
       socket.close(1000, 'meeting audio stopped');
+    } else if (socket?.readyState === WebSocket.CONNECTING) {
+      socket.close();
     }
     socketRef.current = null;
+
     setRecording(false);
     setPartialTranscript('');
-  };
+    if (!silent) showInfo('录音已停止，会议内容已保存。');
+  }
 
   const submitManualText = async () => {
-    if (!meetingId) return setMessage('请先创建会议');
-    const append = await fetch(`${API}/meetings/${meetingId}/transcript`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({text: manualText}),
-    });
-    if (!append.ok) throw new Error('文本保存失败');
-    setFinalTranscript((current) => [current, manualText].filter(Boolean).join('\n'));
-    const response = await fetch(`${API}/meetings/${meetingId}/analyze`, {method: 'POST'});
-    const data = await response.json();
-    setReminders(data.reminders || []);
-    setMessage(`识别主题：${(data.topics || []).join('、') || '暂无'}`);
+    if (!meetingId) {
+      showError('请先创建会议');
+      return;
+    }
+    try {
+      await fetchJson(`${API}/meetings/${meetingId}/transcript`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({text: manualText}),
+      });
+      await restoreMeeting(meetingId);
+      const data = await fetchJson<{topics: string[]; reminders: Reminder[]}>(
+        `${API}/meetings/${meetingId}/analyze`,
+        {method: 'POST'},
+      );
+      setReminders(data.reminders || []);
+      showInfo(`识别主题：${(data.topics || []).join('、') || '暂无'}`);
+    } catch (error) {
+      showError(getErrorMessage(error));
+    }
   };
 
   return (
     <main>
       <header className="hero">
         <div>
-          <span className="eyebrow">Sprint 1 · Realtime Meeting Intelligence</span>
+          <span className="eyebrow">Bug Fix Sprint 1.1</span>
           <h1>DecisionOS 实时会议</h1>
           <p>实时语音转写、企业历史检索与主动提醒。</p>
         </div>
         <div className={`status ${recording ? 'recording' : ''}`}>
           <span />
-          {recording ? '正在录音' : connectionState === 'connecting' ? '正在连接' : '待机'}
+          {recording
+            ? '正在录音'
+            : connectionState === 'connecting'
+              ? '正在连接'
+              : connectionState === 'disconnected'
+                ? '连接已断开'
+                : '待机'}
         </div>
       </header>
 
@@ -303,30 +612,66 @@ function App() {
         <h2>会议准备</h2>
         <div className="toolbar">
           <button onClick={seed}>导入示例知识</button>
-          <select value={projectId} onChange={(event) => setProjectId(event.target.value)}>
+          <select
+            value={projectId}
+            onChange={(event) => setProjectId(event.target.value)}
+          >
             <option value="">选择项目</option>
             {projects.map((project) => (
-              <option key={project.id} value={project.id}>{project.name}</option>
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
             ))}
           </select>
-          <button onClick={createMeeting} disabled={!projectId || recording}>创建会议</button>
+          <button
+            onClick={createMeeting}
+            disabled={!projectId || recording}
+          >
+            创建会议
+          </button>
         </div>
+
         <div className="mode-row">
           <label>
             ASR 模式
             <select
               value={asrMode}
-              onChange={(event) => setAsrMode(event.target.value as 'browser'|'deepgram')}
+              onChange={(event) =>
+                setAsrMode(event.target.value as 'browser'|'deepgram')
+              }
               disabled={recording}
             >
               <option value="browser">浏览器实时识别（无需密钥）</option>
               <option value="deepgram">Deepgram 流式音频</option>
             </select>
           </label>
+
           {!browserSpeechSupported && asrMode === 'browser' && (
-            <span className="warning">当前浏览器不支持浏览器语音识别</span>
+            <span className="warning">
+              当前浏览器不支持浏览器语音识别
+            </span>
+          )}
+
+          {connectionState === 'disconnected' && meetingId && (
+            <button onClick={startRecording}>重新连接</button>
           )}
         </div>
+
+        {meetingId && (
+          <div className="meeting-session">
+            当前会议：<code>{meetingId}</code>
+            <button
+              className="link-button"
+              onClick={() =>
+                restoreMeeting(meetingId).catch((error) =>
+                  showError(getErrorMessage(error))
+                )
+              }
+            >
+              刷新会议内容
+            </button>
+          </div>
+        )}
       </section>
 
       <div className="meeting-grid">
@@ -335,27 +680,47 @@ function App() {
             <h2>实时转写</h2>
             <div>
               {!recording ? (
-                <button className="record-button" onClick={startRecording} disabled={!meetingId}>
+                <button
+                  className="record-button"
+                  onClick={startRecording}
+                  disabled={!meetingId}
+                >
                   ● 开始录音
                 </button>
               ) : (
-                <button className="stop-button" onClick={stopRecording}>■ 停止录音</button>
+                <button
+                  className="stop-button"
+                  onClick={() => stopRecording()}
+                >
+                  ■ 停止录音
+                </button>
               )}
             </div>
           </div>
+
           <div className="transcript">
-            {finalTranscript ? finalTranscript.split('\n').map((line, index) => (
-              <p key={`${line}-${index}`}>{line}</p>
-            )) : <p className="placeholder">创建会议并开始讲话，转写文本会显示在这里。</p>}
-            {partialTranscript && <p className="partial">{partialTranscript}</p>}
+            {finalTranscript
+              ? finalTranscript.split('\n').map((line, index) => (
+                  <p key={`${line}-${index}`}>{line}</p>
+                ))
+              : (
+                <p className="placeholder">
+                  创建会议并开始讲话，转写文本会显示在这里。
+                </p>
+              )}
+            {partialTranscript && (
+              <p className="partial">{partialTranscript}</p>
+            )}
           </div>
 
           <details className="manual-fallback">
             <summary>手工文本调试</summary>
-            <textarea rows={3} value={manualText} onChange={(event) => setManualText(event.target.value)} />
-            <button onClick={() => submitManualText().catch((error) => setMessage(String(error)))}>
-              提交并分析
-            </button>
+            <textarea
+              rows={3}
+              value={manualText}
+              onChange={(event) => setManualText(event.target.value)}
+            />
+            <button onClick={submitManualText}>提交并分析</button>
           </details>
         </section>
 
@@ -363,7 +728,8 @@ function App() {
           <h2>AI 实时提醒</h2>
           {reminders.length === 0 && (
             <div className="empty-reminder">
-              当会议出现价格、付款、利润或风险议题时，相关历史信息会主动显示。
+              当会议出现价格、付款、利润或风险议题时，
+              相关历史信息会主动显示。
             </div>
           )}
           {reminders.map((reminder, index) => (
@@ -372,14 +738,17 @@ function App() {
               <p>{reminder.summary}</p>
               <small>
                 来源：{reminder.source.type} / {reminder.source.id}
-                {' · '}相关度 {Math.round(reminder.relevanceScore * 100)}%
+                {' · '}
+                相关度 {Math.round(reminder.relevanceScore * 100)}%
               </small>
             </article>
           ))}
         </section>
       </div>
 
-      <footer>{message || '请先导入示例知识并创建会议。'}</footer>
+      <footer className={messageType === 'error' ? 'error-message' : ''}>
+        {message || '请先导入示例知识并创建会议。'}
+      </footer>
     </main>
   );
 }
