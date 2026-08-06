@@ -1,0 +1,6 @@
+services:
+  backend:
+    environment:
+      APP_NAME: ${APP_NAME:-DecisionOS Demo API}
+      APP_ENVIRONMENT: ${APP_ENVIRONMENT:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}

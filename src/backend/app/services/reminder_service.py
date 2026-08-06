@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.entities import Meeting
+from app.observability.runtime_metrics import runtime_metrics
 from app.services.context_service import analyze_meeting
 
 
@@ -54,7 +55,11 @@ class RealtimeReminderCoordinator:
             ):
                 return None
 
+            analysis_started = time.perf_counter()
             result = analyze_meeting(db, meeting)
+            runtime_metrics.record_reminder_duration(
+                (time.perf_counter() - analysis_started) * 1000
+            )
             deduplicated = []
             for reminder in result.get("reminders", []):
                 source = reminder.get("source") or {}

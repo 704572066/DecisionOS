@@ -11,6 +11,7 @@ from app.asr.factory import create_streaming_provider
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.models.entities import Meeting
+from app.observability.runtime_metrics import runtime_metrics
 from app.services.reminder_service import realtime_reminder_coordinator
 from app.services.transcript_service import append_final_segment
 
@@ -110,6 +111,7 @@ async def receive_init(websocket: WebSocket) -> dict | None:
 @router.websocket("/api/meetings/{meeting_id}/audio-stream")
 async def meeting_audio_stream(websocket: WebSocket, meeting_id: str) -> None:
     await websocket.accept()
+    runtime_metrics.websocket_opened(meeting_id)
 
     db = SessionLocal()
     try:
@@ -187,8 +189,14 @@ async def meeting_audio_stream(websocket: WebSocket, meeting_id: str) -> None:
         except WebSocketDisconnect:
             logger.info("Browser ASR disconnected: meeting=%s", meeting_id)
         except Exception:
+            runtime_metrics.record_error(
+                category="websocket.browser_asr",
+                message="Browser ASR session failed",
+                meeting_id=meeting_id,
+            )
             logger.exception("Browser ASR session failed: meeting=%s", meeting_id)
         finally:
+            runtime_metrics.websocket_closed(meeting_id)
             with suppress(RuntimeError):
                 await websocket.close()
         return
@@ -251,12 +259,18 @@ async def meeting_audio_stream(websocket: WebSocket, meeting_id: str) -> None:
     except WebSocketDisconnect:
         logger.info("Streaming ASR disconnected: meeting=%s", meeting_id)
     except Exception as exc:
+        runtime_metrics.record_error(
+            category="websocket.streaming_asr",
+            message=str(exc),
+            meeting_id=meeting_id,
+        )
         logger.exception("Streaming ASR failed: meeting=%s", meeting_id)
         await send_json_safe(
             websocket,
             {"type": "error", "message": f"ASR 会话异常：{exc}"},
         )
     finally:
+        runtime_metrics.websocket_closed(meeting_id)
         for task in (browser_task, provider_task):
             if task and not task.done():
                 task.cancel()
