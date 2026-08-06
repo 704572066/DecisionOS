@@ -85,6 +85,7 @@ async def persist_and_notify(
                     "type": "reminder.batch",
                     "topics": result["topics"],
                     "reminders": result["reminders"],
+                    "context": result.get("context"),
                 },
             )
     finally:

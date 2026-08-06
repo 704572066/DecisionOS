@@ -2,9 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.context.builder import context_builder
+from app.context.service import build_meeting_context
 from app.db.session import get_db
 from app.models.entities import Decision, KnowledgeItem, Meeting, Project, Task
-from app.schemas.contracts import DecisionCreate, MeetingCreate, ProjectCreate, TranscriptAppend
+from app.schemas.contracts import ContextBuildRequest, DecisionCreate, MeetingCreate, ProjectCreate, TranscriptAppend
 from app.services.context_service import analyze_meeting
 from app.services.transcript_service import append_final_segment, list_segments
 
@@ -110,6 +112,29 @@ def analyze(meeting_id: str, db: Session = Depends(get_db)):
         raise HTTPException(404, "Meeting not found")
     return analyze_meeting(db, m)
 
+
+@router.get("/meetings/{meeting_id}/context")
+def get_meeting_context(meeting_id: str, maxCharacters: int = 1600, db: Session = Depends(get_db)):
+    meeting = db.get(Meeting, meeting_id)
+    if not meeting:
+        raise HTTPException(404, "Meeting not found")
+    return build_meeting_context(db, meeting, max_characters=max(200, min(maxCharacters, 12000))).model_dump(mode="json")
+
+@router.post("/context/build")
+def build_context(body: ContextBuildRequest, db: Session = Depends(get_db)):
+    project = db.get(Project, body.projectId)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    transcript = body.transcript
+    if body.meetingId:
+        meeting = db.get(Meeting, body.meetingId)
+        if not meeting:
+            raise HTTPException(404, "Meeting not found")
+        if meeting.project_id != body.projectId:
+            raise HTTPException(400, "Meeting does not belong to project")
+        if not transcript:
+            transcript = meeting.transcript or ""
+    return context_builder.build(db, project_id=body.projectId, meeting_id=body.meetingId, transcript=transcript, objective=body.objective, max_characters=body.maxCharacters).model_dump(mode="json")
 
 @router.post("/decisions")
 def create_decision(body: DecisionCreate, db: Session = Depends(get_db)):

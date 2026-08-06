@@ -80,6 +80,7 @@ class RealtimeReminderCoordinator:
                 "meetingId": meeting.id,
                 "topics": result.get("topics", []),
                 "reminders": deduplicated,
+                "context": result.get("context"),
             }
 
     def cleanup(self, meeting_id: str) -> None:
