@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 class ContextEntity(BaseModel):
     name: str
     entityType: str = "unknown"
-    confidence: float = Field(default=0.7, ge=0, le=1)
+    confidence: float = Field(default=.7, ge=0, le=1)
     mentions: int = Field(default=1, ge=1)
 
 class ContextFact(BaseModel):
@@ -21,7 +21,7 @@ class ContextReference(BaseModel):
     title: str
     summary: str = ""
     sourceType: str = ""
-    relevanceScore: float = Field(default=0.0, ge=0, le=1)
+    relevanceScore: float = Field(default=0, ge=0, le=1)
 
 class ContextConstraint(BaseModel):
     constraintType: str
@@ -29,11 +29,20 @@ class ContextConstraint(BaseModel):
     source: str = "meeting"
     severity: Literal["info","warning","critical"] = "info"
 
+class TranscriptCleaningMetadata(BaseModel):
+    rawSegments: int = 0
+    cleanSegments: int = 0
+    removedSegments: int = 0
+    mergedSegments: int = 0
+    replacements: int = 0
+
 class ContextMetadata(BaseModel):
-    builderVersion: str = "context-builder-v0.1"
+    builderVersion: str = "context-builder-v0.1.1"
     generatedAt: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     transcriptCharacters: int = 0
     analyzedCharacters: int = 0
+    cleanTranscriptCharacters: int = 0
+    cleaning: TranscriptCleaningMetadata = Field(default_factory=TranscriptCleaningMetadata)
 
 class BusinessContext(BaseModel):
     contextId: str
@@ -42,6 +51,7 @@ class BusinessContext(BaseModel):
     intent: str = ""
     currentObjective: str = ""
     transcriptWindow: str = ""
+    cleanTranscriptWindow: str = ""
     topics: list[str] = Field(default_factory=list)
     entities: list[ContextEntity] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list)
