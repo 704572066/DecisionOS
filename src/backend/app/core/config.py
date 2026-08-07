@@ -10,6 +10,11 @@ class Settings(BaseSettings):
     openai_base_url: str = ""
     openai_api_key: str = ""
     openai_model: str = "gpt-4.1-mini"
+    llm_timeout_seconds: float = 30.0
+    llm_json_mode: bool = False
+    reminder_temperature: float = 0.1
+    reminder_retrieval_top_k: int = 8
+    reminder_evidence_top_k: int = 5
     cors_origins: str = "http://localhost:5173"
     embedding_base_url: str = ""
     embedding_api_key: str = ""

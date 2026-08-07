@@ -7,9 +7,9 @@ from threading import RLock
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.intelligence.reminder_engine import ai_reminder_engine
 from app.models.entities import Meeting
 from app.observability.runtime_metrics import runtime_metrics
-from app.services.context_service import analyze_meeting
 
 
 @dataclass
@@ -21,70 +21,74 @@ class ReminderState:
 
 
 class RealtimeReminderCoordinator:
-    """In-process reminder throttle for the Demo.
-
-    State is intentionally session-scoped and non-durable. A later Sprint can
-    persist reminder delivery records in PostgreSQL.
-    """
-
     def __init__(self) -> None:
         self._states: dict[str, ReminderState] = {}
         self._lock = RLock()
 
-    def analyze_if_due(
+    async def analyze_if_due(
         self,
         db: Session,
         meeting: Meeting,
         *,
         force: bool = False,
     ) -> dict | None:
+        now = time.monotonic()
+
         with self._lock:
             state = self._states.setdefault(meeting.id, ReminderState())
-            state.last_accessed_at = time.monotonic()
-
+            state.last_accessed_at = now
             transcript = meeting.transcript or ""
             new_chars = max(0, len(transcript) - state.last_analyzed_length)
-            now = time.monotonic()
             cooldown_elapsed = (
                 now - state.last_analyzed_at
                 >= settings.reminder_cooldown_seconds
             )
 
             if not force and (
-                new_chars < settings.reminder_min_chars or not cooldown_elapsed
+                new_chars < settings.reminder_min_chars
+                or not cooldown_elapsed
             ):
                 return None
 
-            analysis_started = time.perf_counter()
-            result = analyze_meeting(db, meeting)
-            runtime_metrics.record_reminder_duration(
-                (time.perf_counter() - analysis_started) * 1000
-            )
-            deduplicated = []
+            # Reserve the current transcript length before network I/O to avoid
+            # duplicate concurrent LLM calls for the same meeting.
+            state.last_analyzed_length = len(transcript)
+            state.last_analyzed_at = now
+
+        analysis_started = time.perf_counter()
+        result = await ai_reminder_engine.generate(db, meeting)
+        runtime_metrics.record_reminder_duration(
+            (time.perf_counter() - analysis_started) * 1000
+        )
+
+        deduplicated = []
+        with self._lock:
+            state = self._states.setdefault(meeting.id, ReminderState())
             for reminder in result.get("reminders", []):
-                source = reminder.get("source") or {}
+                source_ids = ",".join(
+                    sorted(
+                        str(source.get("id"))
+                        for source in reminder.get("sources", [])
+                        if source.get("id")
+                    )
+                )
                 key = (
-                    f"{source.get('type')}:{source.get('id')}:"
-                    f"{reminder.get('title')}:{reminder.get('summary')}"
+                    f"{reminder.get('type')}:{reminder.get('title')}:"
+                    f"{source_ids}"
                 )
                 if key in state.sent_keys:
                     continue
                 state.sent_keys.add(key)
                 deduplicated.append(reminder)
 
-            state.last_analyzed_length = len(transcript)
-            state.last_analyzed_at = now
+            self._remove_stale_states(time.monotonic())
 
-            self._remove_stale_states(now)
-            return {
-                "meetingId": meeting.id,
-                "topics": result.get("topics", []),
-                "reminders": deduplicated,
-                "context": result.get("context"),
-            }
+        return {
+            **result,
+            "reminders": deduplicated,
+        }
 
     def cleanup(self, meeting_id: str) -> None:
-        """Remove volatile state when a meeting is explicitly completed."""
         with self._lock:
             self._states.pop(meeting_id, None)
 

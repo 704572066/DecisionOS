@@ -8,10 +8,15 @@ const SESSION_STORAGE_KEY = 'decisionos.currentMeeting.v1';
 
 type Project = {id: string; name: string; businessGoal: string};
 type Reminder = {
+  type?: string;
   title: string;
   summary: string;
+  suggestion?: string;
+  reason?: string;
+  sources?: Array<{type: string; id: string; title?: string; score?: number}>;
   source: {type: string; id: string};
   relevanceScore: number;
+  confidence?: number;
 };
 type MeetingDetails = {
   id: string;
@@ -736,6 +741,16 @@ function App() {
             <article key={`${reminder.source.id}-${index}`}>
               <strong>{reminder.title}</strong>
               <p>{reminder.summary}</p>
+              {reminder.suggestion && (
+                <p className="reminder-suggestion">
+                  <strong>建议：</strong>{reminder.suggestion}
+                </p>
+              )}
+              {reminder.reason && (
+                <p className="reminder-reason">
+                  <strong>依据：</strong>{reminder.reason}
+                </p>
+              )}
               <small>
                 来源：{reminder.source.type} / {reminder.source.id}
                 {' · '}

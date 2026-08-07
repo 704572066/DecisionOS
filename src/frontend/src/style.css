@@ -101,3 +101,14 @@ footer {
 footer.error-message {
   background: #b42318;
 }
+.reminder-suggestion {
+  margin: 8px 0 4px;
+  padding: 8px 10px;
+  background: rgba(41, 69, 130, .06);
+  border-radius: 8px;
+}
+.reminder-reason {
+  margin: 4px 0 8px;
+  color: #536076;
+  font-size: 13px;
+}

@@ -77,7 +77,7 @@ async def persist_and_notify(
         if not append_result.created and append_result.replaced_segment_id is None:
             return
 
-        result = realtime_reminder_coordinator.analyze_if_due(db, meeting)
+        result = await realtime_reminder_coordinator.analyze_if_due(db, meeting)
         if result and result["reminders"]:
             await send_json_safe(
                 websocket,
@@ -86,6 +86,8 @@ async def persist_and_notify(
                     "topics": result["topics"],
                     "reminders": result["reminders"],
                     "context": result.get("context"),
+                    "diagnostics": result.get("diagnostics"),
+                    "rerankedEvidence": result.get("rerankedEvidence"),
                 },
             )
     finally:
