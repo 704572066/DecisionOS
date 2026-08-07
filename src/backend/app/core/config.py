@@ -11,6 +11,12 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_model: str = "gpt-4.1-mini"
     cors_origins: str = "http://localhost:5173"
+    embedding_base_url: str = ""
+    embedding_api_key: str = ""
+    embedding_model: str = "text-embedding-3-small"
+    embedding_dimensions: int = 1536
+    embedding_send_dimensions: bool = False
+    embedding_timeout_seconds: float = 20.0
 
     asr_provider: str = "browser"
     asr_language: str = "zh-CN"
