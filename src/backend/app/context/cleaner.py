@@ -4,6 +4,8 @@ import re
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 
+from app.context.canonicalizer import canonicalize_business_statements
+
 _SPLIT = re.compile(r"(?<=[。！？!?；;])|\n+")
 _SPACE = re.compile(r"\s+")
 _PUNCT = re.compile(r"[，。！？；：、,.!?;:\s]+")
@@ -48,6 +50,8 @@ class CleanTranscriptResult:
     replacements: int
     consolidated_sentences: int
     incomplete_segments: int
+    covered_sentences: int
+    canonical_statements: int
 
     def metadata(self) -> dict:
         return {
@@ -58,6 +62,8 @@ class CleanTranscriptResult:
             "replacements": self.replacements,
             "consolidatedSentences": self.consolidated_sentences,
             "incompleteSegments": self.incomplete_segments,
+            "coveredSentences": self.covered_sentences,
+            "canonicalStatements": self.canonical_statements,
         }
 
 
@@ -112,17 +118,20 @@ def clean_transcript(text: str) -> CleanTranscriptResult:
         deduplicated.append(segment)
 
     consolidated, consolidated_count = _consolidate_business_sentences(deduplicated)
+    canonical = canonicalize_business_statements(consolidated)
 
     return CleanTranscriptResult(
         raw_text=raw,
-        clean_text="\n".join(consolidated).strip(),
+        clean_text="\n".join(canonical.statements).strip(),
         raw_segments=len(raw_segments),
-        clean_segments=len(consolidated),
+        clean_segments=len(canonical.statements),
         removed_segments=removed,
         merged_segments=merged,
         replacements=replacements,
         consolidated_sentences=consolidated_count,
         incomplete_segments=incomplete,
+        covered_sentences=canonical.covered_sentences,
+        canonical_statements=canonical.canonical_statements,
     )
 
 

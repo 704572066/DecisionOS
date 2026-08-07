@@ -46,10 +46,12 @@ class TranscriptCleaningMetadata(BaseModel):
     replacements: int = 0
     consolidatedSentences: int = 0
     incompleteSegments: int = 0
+    coveredSentences: int = 0
+    canonicalStatements: int = 0
 
 
 class ContextMetadata(BaseModel):
-    builderVersion: str = "context-builder-v0.1.2"
+    builderVersion: str = "context-builder-v0.1.3"
     generatedAt: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
