@@ -6,26 +6,37 @@ from app.retrieval.vector_store import literal
 
 logger = logging.getLogger("decisionos.retrieval.indexer")
 
-async def backfill_embeddings(db, project_id=None, batch_size=16, force=False):
+async def backfill_embeddings(
+    db,
+    project_id=None,
+    batch_size=16,
+    force=False,
+):
     if not embedding_provider.enabled:
-        return {"status":"disabled","message":"Embedding provider is not configured","processed":0}
+        return {
+            "status": "disabled",
+            "message": "Embedding provider is not configured",
+            "processed": 0,
+        }
 
     stmt = select(KnowledgeItem)
+
     if project_id:
-        stmt = stmt.where(KnowledgeItem.project_id == project_id)
-    items = list(db.scalars(stmt).all())
+        stmt = stmt.where(
+            KnowledgeItem.project_id == project_id
+        )
 
     if not force:
-        ids = {
-            row[0]
-            for row in db.execute(
-                text("SELECT id FROM knowledge_items WHERE embedding IS NULL AND (:p IS NULL OR project_id=:p)"),
-                {"p": project_id},
-            ).all()
-        }
-        items = [item for item in items if item.id in ids]
+        stmt = stmt.where(
+            text("embedding IS NULL")
+        )
 
-    processed = failed = 0
+    items = list(
+        db.scalars(stmt).all()
+    )
+
+    processed = 0
+    failed = 0
     for offset in range(0, len(items), batch_size):
         batch = items[offset:offset+batch_size]
         try:
