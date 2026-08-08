@@ -195,7 +195,7 @@ function App() {
     if (node) {
       node.scrollTop = node.scrollHeight;
     }
-  }, [transcript]);
+  }, [finalTranscript, partialTranscript]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -322,7 +322,7 @@ function App() {
               if (seen.has(key)) return false;
               seen.add(key);
               return true;
-            }).slice(0, 10);
+            }).slice(0, 5);
           });
           showInfo(`发现 ${payload.reminders.length} 条历史提醒`);
           break;
@@ -787,7 +787,7 @@ function App() {
             </div>
           </div>
 
-          <div className="transcript">
+          <div className="transcript transcript-scroll" ref={transcriptScrollRef}>
             {finalTranscript
               ? finalTranscript.split('\n').map((line, index) => (
                   <p key={`${line}-${index}`}>{line}</p>
