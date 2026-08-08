@@ -26,6 +26,9 @@ class OpenAICompatibleLLM:
             "model": settings.openai_model,
             "temperature": float(getattr(settings, "reminder_temperature", 0.1)),
             "stream": stream,
+            "enable_thinking": bool(
+                getattr(settings, "reminder_enable_thinking", False)
+            ),
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},

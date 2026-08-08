@@ -4,6 +4,7 @@ import asyncio
 from uuid import uuid4
 import json
 import logging
+import time
 from contextlib import suppress
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -74,8 +75,17 @@ async def stream_ai_reminder(websocket: WebSocket, meeting_id: str) -> None:
         system_prompt, user_prompt = build_prompt(context, evidence)
         parser = StructuredReminderStreamParser(reminder_id)
         raw = ""
+        llm_started_at = time.perf_counter()
+        first_content_ms = None
 
         async for chunk in llm_provider.stream_reminders(system_prompt, user_prompt):
+            if first_content_ms is None:
+                first_content_ms = (time.perf_counter() - llm_started_at) * 1000
+                await send_json_safe(websocket, {
+                    "type": "reminder.ttft",
+                    "reminderId": reminder_id,
+                    "firstContentMs": round(first_content_ms, 2),
+                })
             raw += chunk
             for update in parser.feed(chunk):
                 await send_json_safe(websocket, {
@@ -92,11 +102,23 @@ async def stream_ai_reminder(websocket: WebSocket, meeting_id: str) -> None:
             evidence,
         )[:3]
 
+        llm_total_ms = (time.perf_counter() - llm_started_at) * 1000
+
         await send_json_safe(websocket, {
             "type": "reminder.completed",
             "reminderId": reminder_id,
             "reminders": [item.websocket_dict() for item in validated],
             "context": context.model_dump(mode="json"),
+            "diagnostics": {
+                "thinkingEnabled": bool(
+                    getattr(settings, "reminder_enable_thinking", False)
+                ),
+                "firstContentMs": (
+                    round(first_content_ms, 2)
+                    if first_content_ms is not None else None
+                ),
+                "llmTotalMs": round(llm_total_ms, 2),
+            },
         })
     except Exception as exc:
         logger.exception("Streaming AI reminder failed: meeting=%s", meeting_id)

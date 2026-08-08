@@ -96,6 +96,7 @@ function App() {
     '客户要求整体价格下降18%，并希望付款周期延长到180天。'
   );
   const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [streamingTtftMs, setStreamingTtftMs] = useState<number | null>(null);
   const [streamingReminder, setStreamingReminder] = useState<{
     id: string;
     title: string;
@@ -262,6 +263,7 @@ function App() {
           }
           break;
         case 'reminder.started':
+          setStreamingTtftMs(null);
           setStreamingReminder({
             id: payload.reminderId,
             title: '',
@@ -269,6 +271,9 @@ function App() {
             suggestion: '',
             reason: '',
           });
+          break;
+        case 'reminder.ttft':
+          setStreamingTtftMs(payload.firstContentMs ?? null);
           break;
         case 'reminder.delta':
           setStreamingReminder((current) => {
@@ -767,7 +772,14 @@ function App() {
           <h2>AI 实时提醒</h2>
           {streamingReminder && (
             <article className="streaming-reminder">
-              <div className="streaming-state">AI 生成中…</div>
+              <div className="streaming-state">
+                AI 生成中…
+                {streamingTtftMs !== null && (
+                  <span className="streaming-ttft">
+                    首字 {Math.round(streamingTtftMs)}ms
+                  </span>
+                )}
+              </div>
               {streamingReminder.title && <strong>{streamingReminder.title}</strong>}
               {streamingReminder.summary && <p>{streamingReminder.summary}</p>}
               {streamingReminder.suggestion && (

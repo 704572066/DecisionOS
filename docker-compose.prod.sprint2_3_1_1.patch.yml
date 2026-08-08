@@ -1,0 +1,4 @@
+services:
+  backend:
+    environment:
+      REMINDER_ENABLE_THINKING: ${REMINDER_ENABLE_THINKING:-false}
