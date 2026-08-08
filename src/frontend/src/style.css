@@ -194,3 +194,62 @@ footer.error-message {
     border-radius: 18px 18px 10px 10px;
   }
 }
+/* Sprint 3-1.2 Realtime Workspace Layout */
+.realtime-column {
+  height: 560px;
+  min-height: 560px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.transcript-panel,
+.reminder-panel {
+  min-height: 0;
+}
+
+.transcript-scroll,
+.transcript-content,
+.transcript-list,
+.reminder-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.transcript-scroll,
+.transcript-content,
+.transcript-list {
+  scroll-behavior: smooth;
+}
+
+.reminder-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 4px;
+}
+
+.streaming-reminder {
+  flex: 0 0 auto;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #fff;
+}
+
+@media (max-width: 980px) {
+  .realtime-column {
+    height: 460px;
+    min-height: 460px;
+  }
+}
+
+@media (max-width: 720px) {
+  .realtime-column {
+    height: 420px;
+    min-height: 420px;
+  }
+}

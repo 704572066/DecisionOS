@@ -103,6 +103,8 @@ function App() {
     '客户要求整体价格下降18%，并希望付款周期延长到180天。'
   );
   const [reminders, setReminders] = useState<Reminder[]>([]);
+  const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
+  const reminderScrollRef = useRef<HTMLDivElement | null>(null);
   const [decisionCandidate, setDecisionCandidate] = useState<DecisionCandidate | null>(null);
   const [candidateTitle, setCandidateTitle] = useState('');
   const [candidateStatement, setCandidateStatement] = useState('');
@@ -187,6 +189,13 @@ function App() {
     persistMeetingSession(data.id, data.projectId);
     showInfo(`已恢复会议：${data.title}`);
   };
+
+  useEffect(() => {
+    const node = transcriptScrollRef.current;
+    if (node) {
+      node.scrollTop = node.scrollHeight;
+    }
+  }, [transcript]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -296,7 +305,7 @@ function App() {
           setStreamingReminder(null);
           if (payload.reminders) {
             setReminders((current) =>
-              [...payload.reminders, ...current].slice(0, 10)
+              [...payload.reminders, ...current].slice(0, 5)
             );
           }
           break;
@@ -755,7 +764,7 @@ function App() {
       </section>
 
       <div className="meeting-grid">
-        <section className="transcript-panel">
+        <section className="transcript-panel realtime-column">
           <div className="panel-title">
             <h2>实时转写</h2>
             <div>
@@ -804,7 +813,7 @@ function App() {
           </details>
         </section>
 
-        <section className="reminder-panel">
+        <section className="reminder-panel realtime-column">
           <h2>AI 实时提醒</h2>
           {streamingReminder && (
             <article className="streaming-reminder">
@@ -832,7 +841,8 @@ function App() {
               相关历史信息会主动显示。
             </div>
           )}
-          {reminders.map((reminder, index) => (
+          <div className="reminder-scroll" ref={reminderScrollRef}>
+            {reminders.map((reminder, index) => (
             <article key={`${reminder.source.id}-${index}`}>
               <strong>{reminder.title}</strong>
               <p>{reminder.summary}</p>
@@ -856,6 +866,7 @@ function App() {
               </small>
             </article>
           ))}
+          </div>
         </section>
       </div>
 
