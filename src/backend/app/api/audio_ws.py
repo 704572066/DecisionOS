@@ -20,6 +20,35 @@ from app.services.transcript_service import append_final_segment
 
 logger = logging.getLogger(__name__)
 streaming_reminder_tasks: set[asyncio.Task] = set()
+
+streaming_context_keys: dict[str, str] = {}
+streaming_context_lock = asyncio.Lock()
+
+def reminder_context_key(context) -> str:
+    canonical = " ".join(
+        (context.cleanTranscriptWindow or "").replace("\n", " ").split()
+    )
+    facts = sorted(
+        str(fact.normalizedValue or fact.text)
+        for fact in context.facts
+        if (fact.normalizedValue or fact.text)
+    )
+    return canonical + "||" + "|".join(facts)
+
+async def reserve_reminder_context(meeting_id: str, context) -> bool:
+    key = reminder_context_key(context)
+    if not key.strip("|"):
+        return False
+    async with streaming_context_lock:
+        previous = streaming_context_keys.get(meeting_id)
+        if previous == key:
+            return False
+        streaming_context_keys[meeting_id] = key
+        return True
+
+def clear_reminder_context(meeting_id: str) -> None:
+    streaming_context_keys.pop(meeting_id, None)
+
 router = APIRouter()
 
 
@@ -49,6 +78,14 @@ async def stream_ai_reminder(websocket: WebSocket, meeting_id: str) -> None:
             return
 
         context = build_meeting_context(db, meeting)
+
+        if not await reserve_reminder_context(meeting_id, context):
+            logger.info(
+                "Skipped duplicate AI reminder context: meeting=%s",
+                meeting_id,
+            )
+            return
+
         retrieval = await hybrid_retriever.search(
             db,
             build_retrieval_query(context, top_k=8),

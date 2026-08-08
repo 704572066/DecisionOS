@@ -860,8 +860,21 @@ function App() {
       </div>
 
       {decisionCandidate && (
-        <section className="decision-candidate-panel">
-          <div className="panel-title"><div><span className="eyebrow">Decision Draft</span><h2>决策草案</h2></div>
+        <div
+          className="decision-modal-backdrop"
+          role="presentation"
+          onMouseDown={() => {
+            if (!candidateBusy) setDecisionCandidate(null);
+          }}
+        >
+          <section
+            className="decision-candidate-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="decision-candidate-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+          <div className="panel-title"><div><span className="eyebrow">Decision Draft</span><h2 id="decision-candidate-title">决策草案</h2></div>
             <button className="link-button" onClick={() => setDecisionCandidate(null)} disabled={candidateBusy}>取消</button>
           </div>
           <label>标题<input value={candidateTitle} onChange={(e) => setCandidateTitle(e.target.value)} /></label>
