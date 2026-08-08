@@ -133,3 +133,9 @@ footer.error-message {
   font-size: 11px;
   opacity: .75;
 }
+.reminder-actions{margin:10px 0 8px}.reminder-actions button{width:auto}
+.decision-candidate-panel{margin-top:20px;padding:22px;border:1px solid rgba(80,96,130,.22);border-radius:16px;background:rgba(255,255,255,.82)}
+.decision-candidate-panel label{display:block;margin:14px 0;font-size:13px;font-weight:600}
+.decision-candidate-panel input,.decision-candidate-panel textarea{box-sizing:border-box;width:100%;margin-top:6px}
+.candidate-block{margin:14px 0;padding:12px 14px;border-radius:10px;background:rgba(41,69,130,.05)}
+.candidate-block ul{margin:8px 0 0;padding-left:20px}.candidate-block small{opacity:.7}.candidate-actions{display:flex;justify-content:flex-end;margin-top:16px}

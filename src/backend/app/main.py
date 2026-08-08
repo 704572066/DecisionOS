@@ -7,6 +7,7 @@ from app.api.routes import router
 from app.api.retrieval import router as retrieval_router
 from app.api.retrieval_admin import router as retrieval_admin_router
 from app.api.ai_reminder import router as ai_reminder_router
+from app.api.decision_candidates import router as decision_candidate_router
 from app.core.config import settings
 from app.db.session import Base, engine
 from app.observability.logging_config import configure_logging
@@ -25,6 +26,7 @@ app.add_middleware(
 )
 app.include_router(router)
 app.include_router(ai_reminder_router)
+app.include_router(decision_candidate_router)
 app.include_router(retrieval_router)
 app.include_router(retrieval_admin_router)
 app.include_router(audio_router)

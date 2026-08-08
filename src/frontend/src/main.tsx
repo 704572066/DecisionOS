@@ -18,6 +18,13 @@ type Reminder = {
   relevanceScore: number;
   confidence?: number;
 };
+type DecisionCandidate = {
+  candidateId: string; projectId: string; meetingId: string; contextId: string;
+  title: string; summary: string; statement: string; reasons: string[]; risks: string[];
+  evidence: Array<{type: string; id: string; title: string; summary: string; score: number}>;
+  suggestedTasks: string[]; status: string;
+};
+
 type MeetingDetails = {
   id: string;
   projectId: string;
@@ -96,6 +103,10 @@ function App() {
     '客户要求整体价格下降18%，并希望付款周期延长到180天。'
   );
   const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [decisionCandidate, setDecisionCandidate] = useState<DecisionCandidate | null>(null);
+  const [candidateTitle, setCandidateTitle] = useState('');
+  const [candidateStatement, setCandidateStatement] = useState('');
+  const [candidateBusy, setCandidateBusy] = useState(false);
   const [streamingTtftMs, setStreamingTtftMs] = useState<number | null>(null);
   const [streamingReminder, setStreamingReminder] = useState<{
     id: string;
@@ -609,6 +620,31 @@ function App() {
     if (!silent) showInfo('录音已停止，会议内容已保存。');
   }
 
+  const createDecisionCandidate = async (reminder: Reminder) => {
+    if (!meetingId) return showError('请先创建会议');
+    try {
+      setCandidateBusy(true);
+      const candidate = await fetchJson<DecisionCandidate>(`${API}/decisions/meetings/${meetingId}/candidate`, {
+        method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({reminder}),
+      });
+      setDecisionCandidate(candidate); setCandidateTitle(candidate.title); setCandidateStatement(candidate.statement);
+    } catch (error) { showError(`生成决策草案失败：${getErrorMessage(error)}`); }
+    finally { setCandidateBusy(false); }
+  };
+
+  const confirmDecisionCandidate = async () => {
+    if (!decisionCandidate) return;
+    try {
+      setCandidateBusy(true);
+      const result = await fetchJson<{decisionId:string;status:string;knowledgeUpdated:boolean}>(`${API}/decisions/confirm`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({candidate:decisionCandidate,title:candidateTitle,statement:candidateStatement}),
+      });
+      setDecisionCandidate(null); showInfo(`决策已确认：${result.decisionId}，企业知识已更新`);
+    } catch (error) { showError(`确认决策失败：${getErrorMessage(error)}`); }
+    finally { setCandidateBusy(false); }
+  };
+
   const submitManualText = async () => {
     if (!meetingId) {
       showError('请先创建会议');
@@ -810,6 +846,9 @@ function App() {
                   <strong>依据：</strong>{reminder.reason}
                 </p>
               )}
+              <div className="reminder-actions">
+                <button onClick={() => createDecisionCandidate(reminder)} disabled={candidateBusy}>生成决策</button>
+              </div>
               <small>
                 来源：{reminder.source.type} / {reminder.source.id}
                 {' · '}
@@ -819,6 +858,20 @@ function App() {
           ))}
         </section>
       </div>
+
+      {decisionCandidate && (
+        <section className="decision-candidate-panel">
+          <div className="panel-title"><div><span className="eyebrow">Decision Draft</span><h2>决策草案</h2></div>
+            <button className="link-button" onClick={() => setDecisionCandidate(null)} disabled={candidateBusy}>取消</button>
+          </div>
+          <label>标题<input value={candidateTitle} onChange={(e) => setCandidateTitle(e.target.value)} /></label>
+          <label>决策内容<textarea rows={4} value={candidateStatement} onChange={(e) => setCandidateStatement(e.target.value)} /></label>
+          {decisionCandidate.risks.length > 0 && <div className="candidate-block"><strong>风险</strong><ul>{decisionCandidate.risks.map((x)=><li key={x}>{x}</li>)}</ul></div>}
+          <div className="candidate-block"><strong>依据</strong><ul>{decisionCandidate.evidence.map((x)=><li key={x.id}>{x.title}<small> · {x.type} · {Math.round(x.score*100)}%</small></li>)}</ul></div>
+          {decisionCandidate.suggestedTasks.length > 0 && <div className="candidate-block"><strong>建议后续事项</strong><ul>{decisionCandidate.suggestedTasks.map((x)=><li key={x}>{x}</li>)}</ul></div>}
+          <div className="candidate-actions"><button onClick={confirmDecisionCandidate} disabled={candidateBusy || !candidateTitle.trim() || !candidateStatement.trim()}>{candidateBusy?'处理中…':'确认决策'}</button></div>
+        </section>
+      )}
 
       <footer className={messageType === 'error' ? 'error-message' : ''}>
         {message || '请先导入示例知识并创建会议。'}
