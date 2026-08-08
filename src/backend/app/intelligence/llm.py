@@ -21,21 +21,51 @@ class OpenAICompatibleLLM:
             and getattr(settings, "openai_model", "")
         )
 
-    def _body(self, system_prompt: str, user_prompt: str, *, stream: bool) -> dict:
+    def _body(self, system_prompt: str, user_prompt: str, *, stream: bool,) -> dict:
         body = {
             "model": settings.openai_model,
-            "temperature": float(getattr(settings, "reminder_temperature", 0.1)),
-            "stream": stream,
-            "enable_thinking": bool(
-                getattr(settings, "reminder_enable_thinking", False)
+            "temperature": float(
+                getattr(
+                    settings,
+                    "reminder_temperature",
+                    0.1,
+                )
             ),
+            "stream": stream,
+
+            "thinking": {
+                "type": (
+                    "enabled"
+                    if getattr(
+                        settings,
+                        "reminder_enable_thinking",
+                        False,
+                    )
+                    else "disabled"
+                )
+            },
+
             "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
+                {
+                    "role": "system",
+                    "content": system_prompt,
+                },
+                {
+                    "role": "user",
+                    "content": user_prompt,
+                },
             ],
         }
-        if getattr(settings, "llm_json_mode", False):
-            body["response_format"] = {"type": "json_object"}
+
+        if getattr(
+            settings,
+            "llm_json_mode",
+            False,
+        ):
+            body["response_format"] = {
+                "type": "json_object"
+            }
+
         return body
 
     async def generate_reminders(self, system_prompt: str, user_prompt: str) -> ReminderEnvelope:
