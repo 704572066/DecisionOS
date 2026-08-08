@@ -139,3 +139,58 @@ footer.error-message {
 .decision-candidate-panel input,.decision-candidate-panel textarea{box-sizing:border-box;width:100%;margin-top:6px}
 .candidate-block{margin:14px 0;padding:12px 14px;border-radius:10px;background:rgba(41,69,130,.05)}
 .candidate-block ul{margin:8px 0 0;padding-left:20px}.candidate-block small{opacity:.7}.candidate-actions{display:flex;justify-content:flex-end;margin-top:16px}
+
+/* Sprint 3-1.1 Decision Candidate Modal */
+.decision-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, .52);
+  backdrop-filter: blur(3px);
+}
+
+.decision-candidate-modal {
+  box-sizing: border-box;
+  width: min(760px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 24px;
+  border: 1px solid rgba(80, 96, 130, .22);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, .24);
+}
+
+.decision-candidate-modal label {
+  display: block;
+  margin: 14px 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.decision-candidate-modal input,
+.decision-candidate-modal textarea {
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.decision-candidate-panel {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .decision-modal-backdrop {
+    align-items: flex-end;
+    padding: 12px;
+  }
+
+  .decision-candidate-modal {
+    max-height: 88vh;
+    border-radius: 18px 18px 10px 10px;
+  }
+}

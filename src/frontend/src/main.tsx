@@ -874,16 +874,85 @@ function App() {
             aria-labelledby="decision-candidate-title"
             onMouseDown={(event) => event.stopPropagation()}
           >
-          <div className="panel-title"><div><span className="eyebrow">Decision Draft</span><h2 id="decision-candidate-title">决策草案</h2></div>
-            <button className="link-button" onClick={() => setDecisionCandidate(null)} disabled={candidateBusy}>取消</button>
-          </div>
-          <label>标题<input value={candidateTitle} onChange={(e) => setCandidateTitle(e.target.value)} /></label>
-          <label>决策内容<textarea rows={4} value={candidateStatement} onChange={(e) => setCandidateStatement(e.target.value)} /></label>
-          {decisionCandidate.risks.length > 0 && <div className="candidate-block"><strong>风险</strong><ul>{decisionCandidate.risks.map((x)=><li key={x}>{x}</li>)}</ul></div>}
-          <div className="candidate-block"><strong>依据</strong><ul>{decisionCandidate.evidence.map((x)=><li key={x.id}>{x.title}<small> · {x.type} · {Math.round(x.score*100)}%</small></li>)}</ul></div>
-          {decisionCandidate.suggestedTasks.length > 0 && <div className="candidate-block"><strong>建议后续事项</strong><ul>{decisionCandidate.suggestedTasks.map((x)=><li key={x}>{x}</li>)}</ul></div>}
-          <div className="candidate-actions"><button onClick={confirmDecisionCandidate} disabled={candidateBusy || !candidateTitle.trim() || !candidateStatement.trim()}>{candidateBusy?'处理中…':'确认决策'}</button></div>
-        </section>
+            <div className="panel-title">
+              <div>
+                <span className="eyebrow">Decision Draft</span>
+                <h2 id="decision-candidate-title">决策草案</h2>
+              </div>
+              <button
+                className="link-button"
+                onClick={() => setDecisionCandidate(null)}
+                disabled={candidateBusy}
+              >
+                取消
+              </button>
+            </div>
+
+            <label>
+              标题
+              <input
+                value={candidateTitle}
+                onChange={(event) => setCandidateTitle(event.target.value)}
+              />
+            </label>
+
+            <label>
+              决策内容
+              <textarea
+                rows={4}
+                value={candidateStatement}
+                onChange={(event) => setCandidateStatement(event.target.value)}
+              />
+            </label>
+
+            {decisionCandidate.risks.length > 0 && (
+              <div className="candidate-block">
+                <strong>风险</strong>
+                <ul>
+                  {decisionCandidate.risks.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="candidate-block">
+              <strong>依据</strong>
+              <ul>
+                {decisionCandidate.evidence.map((item) => (
+                  <li key={item.id}>
+                    {item.title}
+                    <small> · {item.type} · {Math.round(item.score * 100)}%</small>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {decisionCandidate.suggestedTasks.length > 0 && (
+              <div className="candidate-block">
+                <strong>建议后续事项</strong>
+                <ul>
+                  {decisionCandidate.suggestedTasks.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="candidate-actions">
+              <button
+                onClick={confirmDecisionCandidate}
+                disabled={
+                  candidateBusy ||
+                  !candidateTitle.trim() ||
+                  !candidateStatement.trim()
+                }
+              >
+                {candidateBusy ? '处理中…' : '确认决策'}
+              </button>
+            </div>
+          </section>
+        </div>
       )}
 
       <footer className={messageType === 'error' ? 'error-message' : ''}>
