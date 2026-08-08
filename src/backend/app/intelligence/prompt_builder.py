@@ -14,7 +14,7 @@ SYSTEM_PROMPT = """你是 DecisionOS 的企业会议决策提醒引擎。
 4. 不替管理者做最终决定。suggestion 只能是建议或待确认动作。
 5. 最多生成 3 条提醒；没有足够价值时返回空数组。
 6. confidence 代表基于当前证据的提醒可靠程度，不代表事实本身的绝对真实性。
-7. 只返回 JSON，不要 Markdown。"""
+7. 不同业务指标即使数值相同，也不得直接比较或推导。例如：折扣率不等于毛利率，付款周期不等于回款概率。\n8. 必须按字段顺序输出 JSON：type、title、summary、suggestion、reason、sources、confidence。\n9. 只返回 JSON，不要 Markdown。"""
 
 
 def build_prompt(context: BusinessContext, evidence: list[RankedEvidence]) -> tuple[str, str]:

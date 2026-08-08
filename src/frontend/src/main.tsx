@@ -96,6 +96,13 @@ function App() {
     '客户要求整体价格下降18%，并希望付款周期延长到180天。'
   );
   const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [streamingReminder, setStreamingReminder] = useState<{
+    id: string;
+    title: string;
+    summary: string;
+    suggestion: string;
+    reason: string;
+  } | null>(null);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'info'|'error'>('info');
   const [recording, setRecording] = useState(false);
@@ -253,6 +260,33 @@ function App() {
               [current, payload.segment.text].filter(Boolean).join('\n')
             );
           }
+          break;
+        case 'reminder.started':
+          setStreamingReminder({
+            id: payload.reminderId,
+            title: '',
+            summary: '',
+            suggestion: '',
+            reason: '',
+          });
+          break;
+        case 'reminder.delta':
+          setStreamingReminder((current) => {
+            if (!current || current.id !== payload.reminderId) return current;
+            return {...current, [payload.field]: payload.accumulated};
+          });
+          break;
+        case 'reminder.completed':
+          setStreamingReminder(null);
+          if (payload.reminders) {
+            setReminders((current) =>
+              [...payload.reminders, ...current].slice(0, 10)
+            );
+          }
+          break;
+        case 'reminder.failed':
+          setStreamingReminder(null);
+          showError(payload.message || 'AI 提醒生成失败');
           break;
         case 'reminder.batch':
           setReminders((current) => {
@@ -731,6 +765,19 @@ function App() {
 
         <section className="reminder-panel">
           <h2>AI 实时提醒</h2>
+          {streamingReminder && (
+            <article className="streaming-reminder">
+              <div className="streaming-state">AI 生成中…</div>
+              {streamingReminder.title && <strong>{streamingReminder.title}</strong>}
+              {streamingReminder.summary && <p>{streamingReminder.summary}</p>}
+              {streamingReminder.suggestion && (
+                <p><strong>建议：</strong>{streamingReminder.suggestion}</p>
+              )}
+              {streamingReminder.reason && (
+                <p><strong>依据：</strong>{streamingReminder.reason}</p>
+              )}
+            </article>
+          )}
           {reminders.length === 0 && (
             <div className="empty-reminder">
               当会议出现价格、付款、利润或风险议题时，

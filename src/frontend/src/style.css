@@ -112,3 +112,19 @@ footer.error-message {
   color: #536076;
   font-size: 13px;
 }
+.streaming-reminder {
+  position: relative;
+  border: 1px dashed #9ba9c2;
+}
+.streaming-state {
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #667085;
+}
+.streaming-state::after {
+  content: "▋";
+  animation: decisionos-blink 1s step-end infinite;
+}
+@keyframes decisionos-blink {
+  50% { opacity: 0; }
+}

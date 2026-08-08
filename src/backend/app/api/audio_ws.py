@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from uuid import uuid4
 import json
 import logging
 from contextlib import suppress
@@ -11,11 +12,13 @@ from app.asr.factory import create_streaming_provider
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.models.entities import Meeting
+from app.intelligence.reminder_engine import ai_reminder_engine
 from app.observability.runtime_metrics import runtime_metrics
 from app.services.reminder_service import realtime_reminder_coordinator
 from app.services.transcript_service import append_final_segment
 
 logger = logging.getLogger(__name__)
+streaming_reminder_tasks: set[asyncio.Task] = set()
 router = APIRouter()
 
 
@@ -26,6 +29,89 @@ async def send_json_safe(websocket: WebSocket, payload: dict) -> bool:
     except (RuntimeError, WebSocketDisconnect):
         return False
 
+
+
+async def stream_ai_reminder(websocket: WebSocket, meeting_id: str) -> None:
+    from app.context.service import build_meeting_context
+    from app.intelligence.llm import llm_provider, parse_final_stream_json
+    from app.intelligence.prompt_builder import build_prompt
+    from app.intelligence.reranker import rerank_context
+    from app.intelligence.streaming import StructuredReminderStreamParser
+    from app.retrieval.query_builder import build_retrieval_query
+    from app.retrieval.service import hybrid_retriever
+
+    db = SessionLocal()
+    reminder_id = "reminder-" + uuid4().hex[:12]
+    try:
+        meeting = db.get(Meeting, meeting_id)
+        if meeting is None:
+            return
+
+        context = build_meeting_context(db, meeting)
+        retrieval = await hybrid_retriever.search(
+            db,
+            build_retrieval_query(context, top_k=8),
+        )
+        evidence = rerank_context(context, retrieval["results"], top_k=5)
+
+        await send_json_safe(websocket, {
+            "type": "reminder.started",
+            "reminderId": reminder_id,
+        })
+
+        if not llm_provider.enabled:
+            result = await realtime_reminder_coordinator.analyze_if_due(
+                db, meeting, force=True
+            )
+            await send_json_safe(websocket, {
+                "type": "reminder.completed",
+                "reminderId": reminder_id,
+                "reminders": (result or {}).get("reminders", []),
+                "diagnostics": (result or {}).get("diagnostics"),
+            })
+            return
+
+        system_prompt, user_prompt = build_prompt(context, evidence)
+        parser = StructuredReminderStreamParser(reminder_id)
+        raw = ""
+
+        async for chunk in llm_provider.stream_reminders(system_prompt, user_prompt):
+            raw += chunk
+            for update in parser.feed(chunk):
+                await send_json_safe(websocket, {
+                    "type": "reminder.delta",
+                    "reminderId": reminder_id,
+                    "field": update.field,
+                    "delta": update.delta,
+                    "accumulated": update.accumulated,
+                })
+
+        envelope = parse_final_stream_json(raw)
+        validated = ai_reminder_engine._validate_sources(
+            envelope.reminders,
+            evidence,
+        )[:3]
+
+        await send_json_safe(websocket, {
+            "type": "reminder.completed",
+            "reminderId": reminder_id,
+            "reminders": [item.websocket_dict() for item in validated],
+            "context": context.model_dump(mode="json"),
+        })
+    except Exception as exc:
+        logger.exception("Streaming AI reminder failed: meeting=%s", meeting_id)
+        await send_json_safe(websocket, {
+            "type": "reminder.failed",
+            "reminderId": reminder_id,
+            "message": str(exc),
+        })
+    finally:
+        db.close()
+
+def schedule_streaming_reminder(websocket: WebSocket, meeting_id: str) -> None:
+    task = asyncio.create_task(stream_ai_reminder(websocket, meeting_id))
+    streaming_reminder_tasks.add(task)
+    task.add_done_callback(streaming_reminder_tasks.discard)
 
 async def persist_and_notify(
     websocket: WebSocket,
@@ -77,19 +163,7 @@ async def persist_and_notify(
         if not append_result.created and append_result.replaced_segment_id is None:
             return
 
-        result = await realtime_reminder_coordinator.analyze_if_due(db, meeting)
-        if result and result["reminders"]:
-            await send_json_safe(
-                websocket,
-                {
-                    "type": "reminder.batch",
-                    "topics": result["topics"],
-                    "reminders": result["reminders"],
-                    "context": result.get("context"),
-                    "diagnostics": result.get("diagnostics"),
-                    "rerankedEvidence": result.get("rerankedEvidence"),
-                },
-            )
+        schedule_streaming_reminder(websocket, meeting_id)
     finally:
         db.close()
 
