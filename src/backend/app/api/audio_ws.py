@@ -17,6 +17,7 @@ from app.intelligence.reminder_engine import ai_reminder_engine
 from app.observability.runtime_metrics import runtime_metrics
 from app.services.reminder_service import realtime_reminder_coordinator
 from app.services.transcript_service import append_final_segment
+from app.runtime.service import runtime_state_service
 
 logger = logging.getLogger(__name__)
 streaming_reminder_tasks: set[asyncio.Task] = set()
@@ -202,6 +203,13 @@ async def persist_and_notify(
             end_ms=end_ms,
         )
         segment = append_result.segment
+
+        # Sprint 3-2.2: lightweight Runtime State event update.
+        # No Retriever / Embedding / LLM call here.
+        runtime_state_service.apply_transcript_event(
+            meeting,
+            text,
+        )
 
         await send_json_safe(
             websocket,
