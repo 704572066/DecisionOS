@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -36,7 +38,11 @@ class RuntimeStateService:
             retrievalResults=list(retrieval.get("results") or []),
             rerankedEvidence=list(result.get("rerankedEvidence") or []),
             reminders=list(result.get("reminders") or []),
-            decisionFacts=dict(previous.decisionFacts) if previous else {},
+            decisionFacts=(
+                dict(previous.decisionFacts)
+                if previous
+                else self._decision_facts_from_context(context)
+            ),
             recentEvents=list(previous.recentEvents) if previous else [],
             resolvedRiskKeys=list(previous.resolvedRiskKeys) if previous else [],
             diagnostics={
@@ -90,6 +96,43 @@ class RuntimeStateService:
         runtime_state_reducer.apply(state, events)
         state.diagnostics["eventsExtractedRealtime"] = len(events)
         return runtime_state_store.put(state)
+
+    @staticmethod
+    def _decision_facts_from_context(context: dict) -> dict:
+        output: dict = {}
+        canonical = (
+            context.get("cleanTranscriptWindow")
+            or context.get("transcriptWindow")
+            or ""
+        )
+
+        for fact in context.get("facts") or []:
+            fact_type = fact.get("factType") or ""
+            value = fact.get("normalizedValue") or fact.get("text") or ""
+
+            if (
+                fact_type == "percentage"
+                and any(
+                    term in canonical
+                    for term in ("降价", "折扣", "优惠", "价格下降", "价格下调")
+                )
+            ):
+                match = re.search(r"(\d+(?:\.\d+)?)\s*%", str(value))
+                if match:
+                    output["discountPercent"] = float(match.group(1))
+
+            if (
+                fact_type == "duration"
+                and any(
+                    term in canonical
+                    for term in ("付款", "账期", "回款")
+                )
+            ):
+                match = re.search(r"(\d+)\s*天", str(value))
+                if match:
+                    output["paymentTermDays"] = int(match.group(1))
+
+        return output
 
     @staticmethod
     def _latest_final_segment_text(
