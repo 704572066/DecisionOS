@@ -1,0 +1,14 @@
+/* Sprint 3-3 Decision Signal */
+.priority-layer {
+  transition: all .3s ease;
+}
+
+.signal-risk {
+  animation: decisionSignalPulse 1.2s ease;
+}
+
+@keyframes decisionSignalPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
