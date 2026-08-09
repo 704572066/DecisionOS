@@ -929,21 +929,6 @@ function App() {
                   <div className="board-todo" key={todo.text}><span>□</span><span>{todo.text}</span></div>
                 ))}
               </section>
-
-              <section className="board-section">
-                <div className="board-section-title"><strong>下一步</strong></div>
-                <ol className="board-actions">
-                  {decisionBoard.actions.slice(0, 2).map((action) => <li key={action.text}>{action.text}</li>)}
-                </ol>
-              </section>
-
-              <section className="board-section">
-                <div className="board-section-title"><strong>待确认</strong></div>
-                {decisionBoard.todos.slice(0, 3).map((todo) => (
-                  <div className="board-todo" key={todo.text}><span>□</span><span>{todo.text}</span></div>
-                ))}
-              </section>
-
               <div className="decision-board-links">
                 <button className="secondary-button" onClick={() => setReminderDrawerOpen(true)}>
                   查看提醒 {reminders.length ? `(${reminders.length})` : ''}
