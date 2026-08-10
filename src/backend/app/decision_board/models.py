@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
-
+from app.decision_board.signal import DecisionSignal
 
 DecisionStatus = Literal[
     "gathering_information",
@@ -40,8 +40,7 @@ class BoardTodo(BaseModel):
 
 
 class DecisionBoard(BaseModel):
-    signals: list[dict] = Field(default_factory=list)
-
+    signals: list[DecisionSignal] = Field(default_factory=list)
     meetingId: str
     projectId: str
     contextId: str
