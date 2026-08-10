@@ -387,3 +387,22 @@ footer.error-message {
   overflow-x: hidden;
 }
 
+
+
+.signal-card {
+  padding: 12px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+}
+
+.signal-NOW {
+  border-left: 4px solid red;
+}
+
+.signal-NEXT {
+  border-left: 4px solid orange;
+}
+
+.signal-LATER {
+  border-left: 4px solid gray;
+}

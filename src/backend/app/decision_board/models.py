@@ -40,6 +40,8 @@ class BoardTodo(BaseModel):
 
 
 class DecisionBoard(BaseModel):
+    signals: list[dict] = Field(default_factory=list)
+
     meetingId: str
     projectId: str
     contextId: str

@@ -1,12 +1,7 @@
-from __future__ import annotations
+from pydantic import BaseModel
 
-
-def build_decision_signals(events: list[dict]) -> list[dict]:
-    return [
-        {
-            "title": "AI Decision Signal",
-            "message": event.get("sourceText", ""),
-            "eventType": event.get("type")
-        }
-        for event in events
-    ]
+class DecisionSignal(BaseModel):
+    level: str
+    type: str
+    title: str
+    message: str
