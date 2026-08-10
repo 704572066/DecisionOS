@@ -46,7 +46,10 @@ type DecisionBoard = {
   todos: Array<{text:string;reason:string}>;
   currentConditions: Record<string, unknown>;
   recentEvents: Array<{eventId:string;type:string;
-  signals: Array<{level:string;type:string;title:string;message:string}>;sourceText:string;field?:string;previousValue?:string|number|null;value?:string|number|null}>;
+  // signals: Array<{level:string;type:string;title:string;message:string}>;
+  signals?: DecisionSignal[];
+  sourceText:string;field?:string;
+  previousValue?:string|number|null;value?:string|number|null}>;
   resolvedRisks: string[];
   updatedAt: string;
 };
