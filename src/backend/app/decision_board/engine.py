@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 
 from app.decision_board.claim_guard import claim_guard
+from app.decision_board.signal_engine import DecisionSignalEngine
 from app.decision_board.models import (
     BoardAction,
     BoardEvidence,
@@ -21,6 +22,7 @@ class DecisionBoardEngine:
         evidence = self._evidence(state)
         actions = self._actions(state)
         todos = self._todos(state, risks)
+        signals = DecisionSignalEngine().build(list(state.recentEvents[-6:]))
         readiness = self._readiness(state, evidence)
         status = self._status(state, risks, readiness)
 
@@ -35,6 +37,7 @@ class DecisionBoardEngine:
             evidence=evidence[:5],
             actions=actions[:3],
             todos=todos[:5],
+            signals=signals,
             currentConditions=dict(state.decisionFacts),
             recentEvents=list(state.recentEvents[-6:]),
             resolvedRisks=list(state.resolvedRiskKeys),
