@@ -45,9 +45,19 @@ type DecisionBoard = {
   actions: Array<{text:string;sourceIds:string[]}>;
   todos: Array<{text:string;reason:string}>;
   currentConditions: Record<string, unknown>;
-  recentEvents: Array<{eventId:string;type:string;
+  // recentEvents: Array<{eventId:string;type:string;
   // signals: Array<{level:string;type:string;title:string;message:string}>;
+  // signals?: DecisionSignal[];
   signals?: DecisionSignal[];
+
+  recentEvents: Array<{
+    eventId:string;
+    type:string;
+    sourceText:string;
+    field?:string;
+    previousValue?:string|number|null;
+    value?:string|number|null;
+  }>;
   sourceText:string;field?:string;
   previousValue?:string|number|null;value?:string|number|null}>;
   resolvedRisks: string[];
@@ -915,25 +925,24 @@ function App() {
                 <div className="readiness-track"><div className="readiness-value" style={{width: `${decisionBoard.decisionReadiness}%`}} /></div>
               </div>
 
+              <section className="board-section signal-layer">
+                <div className="board-section-title">
+                  <strong>🤖 AI Decision Signal</strong>
+                </div>
+
+                {(decisionBoard.signals || []).map((signal) => (
+                  <article
+                    key={`${signal.level}-${signal.title}`}
+                    className={`signal-card signal-${signal.level}`}
+                  >
+                    <strong>{signal.title}</strong>
+                    <p>{signal.message}</p>
+                  </article>
+                ))}
+              </section>
+
               <section className="board-section priority-layer">
-                <div className="board-section-title"><strong>
-                <section className="board-section signal-layer">
-                  <div className="board-section-title">
-                    <strong>🤖 AI Decision Signal</strong>
-                  </div>
-                  {(decisionBoard.signals || []).map((signal) => (
-                    <article
-                      key={`${signal.level}-${signal.title}`}
-                      className={`signal-card signal-${signal.level}`}
-                    >
-                      <strong>{signal.title}</strong>
-                      <p>{signal.message}</p>
-                    </article>
-                  ))}
-                </section>
-
-
-🔴 NOW 当前关注</strong></div>
+                <div className="board-section-title"><strong>🔴 NOW 当前关注</strong></div>
                 {decisionBoard.risks.slice(0, 2).map((risk) => (
                   <article key={`${risk.title}-${risk.summary}`} className={`board-risk signal-risk severity-${risk.severity}`}>
                     <span className="risk-dot" />
