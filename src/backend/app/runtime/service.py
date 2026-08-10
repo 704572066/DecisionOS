@@ -71,9 +71,32 @@ class RuntimeStateService:
         meeting: Meeting,
     ) -> RuntimeState:
         cached = runtime_state_store.get(meeting.id)
-        if cached is not None:
+
+        if cached is None:
+            return await self.refresh(db, meeting)
+
+        latest_text = self._latest_final_segment_text(
+            db,
+            meeting.id,
+        )
+
+        if not latest_text:
             return cached
-        return await self.refresh(db, meeting)
+
+        already_processed = any(
+            event.get("sourceText") == latest_text
+            for event in cached.recentEvents
+        )
+
+        if already_processed:
+            return cached
+
+        updated = self.apply_transcript_event(
+            meeting,
+            latest_text,
+        )
+
+        return updated or cached
 
     def apply_transcript_event(
         self,
