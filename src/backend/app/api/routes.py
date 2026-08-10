@@ -101,8 +101,22 @@ def append_transcript(meeting_id: str, body: TranscriptAppend, db: Session = Dep
     m = db.get(Meeting, meeting_id)
     if not m:
         raise HTTPException(404, "Meeting not found")
-    segment = append_final_segment(db, meeting=m, text=body.text, provider="manual")
-    return {"id": m.id, "transcript": m.transcript, "segmentId": segment.id}
+    # segment = append_final_segment(db, meeting=m, text=body.text, provider="manual")
+    # return {"id": m.id, "transcript": m.transcript, "segmentId": segment.id}
+    result = append_final_segment(
+        db,
+        meeting=m,
+        text=body.text,
+        provider="manual"
+    )
+
+    return {
+        "id": m.id,
+        "transcript": m.transcript,
+        "segmentId": result.segment.id,
+        "created": result.created,
+        "replacedSegmentId": result.replaced_segment_id,
+    }
 
 
 @router.post("/meetings/{meeting_id}/analyze")
