@@ -121,9 +121,16 @@ class EventExtractor:
 
     @staticmethod
     def _discount_percent(text: str) -> float | None:
+        # Keep this deterministic, but accept the common negotiation forms
+        # used by ASR/manual input: "折扣调整到18%", "折扣恢复到18%",
+        # "价格下调至8%", and "18%的折扣".
+        change_words = (
+            r"(?:可以|可)?(?:调整|改|改为|变为|提高|增加|降低|降到|恢复|回到|上调|下调)?"
+            r"(?:到|至|为)?"
+        )
         patterns = (
-            r"(?:降价|折扣|优惠|价格(?:下降|下调))\s*(\d+(?:\.\d+)?)\s*%",
-            r"(\d+(?:\.\d+)?)\s*%\s*(?:折扣|降价|优惠)",
+            rf"(?:降价|折扣|优惠|价格(?:下降|下调)?)\s*{change_words}\s*(\d+(?:\.\d+)?)\s*%",
+            r"(\d+(?:\.\d+)?)\s*%\s*(?:的)?\s*(?:折扣|降价|优惠)",
         )
         for pattern in patterns:
             match = re.search(pattern, text)

@@ -49,10 +49,14 @@ class RuntimeStateReducer:
                     new_value,
                 )
 
-                # A discount that moves back above the policy threshold
-                # re-opens a previously resolved discount risk.
-                if new_value > 10 and "discount" in resolved:
-                    resolved.remove("discount")
+                # Keep the discount lifecycle derived from the current fact,
+                # not from whether a separate RiskResolved event happened to be
+                # emitted. This makes 18% -> 8% -> 18% deterministic.
+                if new_value > 10:
+                    if "discount" in resolved:
+                        resolved.remove("discount")
+                elif "discount" not in resolved:
+                    resolved.append("discount")
 
             elif event.type == "PaymentTermChanged" and event.value is not None:
                 new_value = int(event.value)
