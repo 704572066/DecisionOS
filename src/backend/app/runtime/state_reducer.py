@@ -5,7 +5,7 @@ from app.runtime.models import RuntimeState
 
 
 class RuntimeStateReducer:
-
+    @staticmethod
     def _clear_stale_accepted_condition(
         facts: dict,
         event: DecisionEvent,
