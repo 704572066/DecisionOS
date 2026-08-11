@@ -49,6 +49,11 @@ class RuntimeStateReducer:
                     new_value,
                 )
 
+                # A discount that moves back above the policy threshold
+                # re-opens a previously resolved discount risk.
+                if new_value > 10 and "discount" in resolved:
+                    resolved.remove("discount")
+
             elif event.type == "PaymentTermChanged" and event.value is not None:
                 new_value = int(event.value)
                 previous_value = (
@@ -65,6 +70,16 @@ class RuntimeStateReducer:
                     previous_value,
                     new_value,
                 )
+
+                # If payment terms worsen after being resolved, re-open the
+                # payment risk instead of leaving stale resolved state behind.
+                if (
+                    previous_value is not None
+                    and new_value > int(previous_value)
+                    and "payment_term" in resolved
+                ):
+                    resolved.remove("payment_term")
+
             elif event.type == "ConstraintAdded":
                 constraints = list(facts.get("runtimeConstraints") or [])
                 text = str(event.value or event.sourceText)
@@ -83,10 +98,14 @@ class RuntimeStateReducer:
                 )
 
             elif event.type == "RiskResolved":
+                key = None
                 if event.field == "paymentTermDays":
                     key = "payment_term"
-                    if key not in resolved:
-                        resolved.append(key)
+                elif event.field == "discountPercent":
+                    key = "discount"
+
+                if key and key not in resolved:
+                    resolved.append(key)
 
             recent.append(event.model_dump(mode="json"))
 

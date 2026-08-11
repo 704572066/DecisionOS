@@ -94,6 +94,30 @@ class DecisionBoardEngine:
                 )
             )
 
+        # Runtime facts are the source of truth for conditions that are still
+        # active. A reminder may disappear (or be filtered as stale) after a
+        # payment change, but an 18% discount must remain visible until the
+        # discount itself changes.
+        discount = state.decisionFacts.get("discountPercent")
+        if (
+            discount is not None
+            and float(discount) > 10
+            and "discount" not in state.resolvedRiskKeys
+            and not self._has_price_risk(output)
+        ):
+            value = float(discount)
+            output.append(
+                BoardRisk(
+                    title=f"{value:g}%折扣需要重点评估",
+                    summary=(
+                        f"当前折扣为{value:g}%，已超过公司10%的折扣评估门槛；"
+                        "折扣会影响项目利润，是否满足目标毛利率仍需结合项目成本测算。"
+                    ),
+                    severity="high",
+                    sourceIds=self._policy_source_ids(state),
+                )
+            )
+
         order = {"high": 3, "medium": 2, "low": 1}
         output.sort(key=lambda item: order[item.severity], reverse=True)
         return output
@@ -199,6 +223,26 @@ class DecisionBoardEngine:
             )
 
         return output
+
+    @staticmethod
+    def _has_price_risk(risks: list[BoardRisk]) -> bool:
+        terms = ("折扣", "降价", "价格", "利润", "毛利")
+        return any(
+            any(term in (risk.title + " " + risk.summary) for term in terms)
+            for risk in risks
+        )
+
+    @staticmethod
+    def _policy_source_ids(state: RuntimeState) -> list[str]:
+        output = []
+        for item in state.rerankedEvidence:
+            source_type = item.get("sourceType") or item.get("objectType")
+            if source_type != "policy":
+                continue
+            object_id = item.get("objectId") or item.get("itemId")
+            if object_id:
+                output.append(str(object_id))
+        return output[:3]
 
     @staticmethod
     def _readiness(state, evidence):

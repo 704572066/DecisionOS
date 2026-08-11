@@ -45,6 +45,21 @@ class EventExtractor:
                         value=discount,
                     )
                 )
+                # Demo policy: discounts above 10% require risk evaluation.
+                # Only mark the discount risk resolved when the runtime fact
+                # actually crosses back into the <=10% range.
+                if old is not None and float(old) > 10 and discount <= 10:
+                    events.append(
+                        self._event(
+                            "RiskResolved",
+                            meeting_id,
+                            source,
+                            field="discountPercent",
+                            previous=old,
+                            value=discount,
+                            metadata={"reason": "discount_back_within_threshold"},
+                        )
+                    )
 
         payment = self._payment_days(source)
         if payment is not None:
