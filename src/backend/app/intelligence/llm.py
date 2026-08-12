@@ -68,6 +68,32 @@ class OpenAICompatibleLLM:
 
         return body
 
+    async def generate_json(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        *,
+        temperature: float = 0.0,
+    ) -> dict:
+        if not self.enabled:
+            raise RuntimeError("LLM is not configured")
+
+        body = self._body(system_prompt, user_prompt, stream=False)
+        body["temperature"] = temperature
+
+        async with httpx.AsyncClient(
+            timeout=float(getattr(settings, "llm_timeout_seconds", 30.0))
+        ) as client:
+            response = await client.post(
+                settings.openai_base_url.rstrip("/") + "/chat/completions",
+                headers=self._headers(),
+                json=body,
+            )
+            response.raise_for_status()
+            content = response.json()["choices"][0]["message"]["content"]
+
+        return _parse_json_object(content)
+
     async def generate_reminders(self, system_prompt: str, user_prompt: str) -> ReminderEnvelope:
         if not self.enabled:
             raise RuntimeError("LLM is not configured")

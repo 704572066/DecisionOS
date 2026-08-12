@@ -13,6 +13,7 @@ EventType = Literal[
     "ConditionRejected",
     "ConstraintAdded",
     "RiskResolved",
+    "SemanticObjectRecorded",
 ]
 
 

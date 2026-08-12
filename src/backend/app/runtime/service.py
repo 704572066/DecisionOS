@@ -5,9 +5,11 @@ import re
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.intelligence.reminder_engine import ai_reminder_engine
 from app.models.entities import Meeting, MeetingTranscriptSegment
 from app.runtime.event_extractor import event_extractor
+from app.runtime.hybrid_event_extractor import hybrid_event_extractor
 from app.runtime.models import RuntimeState
 from app.runtime.state_reducer import runtime_state_reducer
 from app.runtime.store import runtime_state_store
@@ -62,10 +64,13 @@ class RuntimeStateService:
         if not latest_text:
             latest_text = state.canonicalContext
 
-        events = event_extractor.extract(
+        events = await hybrid_event_extractor.extract(
             meeting.id,
             latest_text,
             previous,
+            semantic_enabled=bool(
+                getattr(settings, "semantic_event_enabled", True)
+            ),
         )
         state = runtime_state_reducer.apply(state, events)
         if latest_segment is not None:
@@ -100,7 +105,7 @@ class RuntimeStateService:
         ):
             return cached
 
-        updated = self.apply_transcript_event(
+        updated = await self.apply_semantic_transcript_event(
             meeting,
             latest_segment.text,
         )
@@ -112,6 +117,31 @@ class RuntimeStateService:
             return runtime_state_store.put(updated)
 
         return cached
+
+    async def apply_semantic_transcript_event(
+        self,
+        meeting: Meeting,
+        text: str,
+    ) -> RuntimeState | None:
+        """Apply hybrid rule + semantic events for a new final segment."""
+        state = runtime_state_store.get(meeting.id)
+        if state is None:
+            return None
+
+        events = await hybrid_event_extractor.extract(
+            meeting.id,
+            text,
+            state,
+            semantic_enabled=bool(
+                getattr(settings, "semantic_event_enabled", True)
+            ),
+        )
+        if not events:
+            return state
+
+        runtime_state_reducer.apply(state, events)
+        state.diagnostics["eventsExtractedSemantic"] = len(events)
+        return runtime_state_store.put(state)
 
     def apply_transcript_event(
         self,

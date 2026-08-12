@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     llm_json_mode: bool = False
     reminder_temperature: float = 0.1
     reminder_enable_thinking: bool = False
+    semantic_event_enabled: bool = True
+    semantic_event_min_confidence: float = 0.72
     reminder_retrieval_top_k: int = 8
     reminder_evidence_top_k: int = 5
     cors_origins: str = "http://localhost:5173"

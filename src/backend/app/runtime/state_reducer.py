@@ -22,6 +22,66 @@ class RuntimeStateReducer:
         ):
             facts.pop("lastAcceptedCondition", None)
 
+    @staticmethod
+    def _apply_semantic_object(
+        facts: dict,
+        event: DecisionEvent,
+    ) -> None:
+        metadata = dict(event.metadata or {})
+        domain = str(metadata.get("domain") or "other")
+        kind = str(metadata.get("kind") or "unknown")
+
+        semantic_state = dict(facts.get("semanticState") or {})
+        domain_items = list(semantic_state.get(domain) or [])
+
+        item = {
+            "kind": kind,
+            "field": event.field,
+            "value": event.value,
+            "relation": metadata.get("relation") or "",
+            "actor": metadata.get("actor") or "",
+            "target": metadata.get("target") or "",
+            "status": metadata.get("status") or "",
+            "confidence": metadata.get("confidence"),
+            "sourceText": event.sourceText,
+            "eventId": event.eventId,
+        }
+
+        replaceable = kind in {
+            "fact_change",
+            "constraint",
+            "scope_change",
+            "resource_constraint",
+            "liability",
+        }
+
+        replaced = False
+        if replaceable:
+            for index, current in enumerate(domain_items):
+                same_slot = (
+                    current.get("kind") == kind
+                    and current.get("field") == event.field
+                    and current.get("target") == item["target"]
+                )
+                if same_slot:
+                    domain_items[index] = item
+                    replaced = True
+                    break
+
+        if not replaced:
+            duplicate = any(
+                current.get("kind") == item["kind"]
+                and current.get("field") == item["field"]
+                and current.get("value") == item["value"]
+                and current.get("sourceText") == item["sourceText"]
+                for current in domain_items
+            )
+            if not duplicate:
+                domain_items.append(item)
+
+        semantic_state[domain] = domain_items[-20:]
+        facts["semanticState"] = semantic_state
+
     def apply(
         self,
         state: RuntimeState,
@@ -113,6 +173,9 @@ class RuntimeStateReducer:
                 facts["lastRejectedCondition"] = str(
                     event.value or event.sourceText
                 )
+
+            elif event.type == "SemanticObjectRecorded":
+                self._apply_semantic_object(facts, event)
 
             elif event.type == "RiskResolved":
                 key = None

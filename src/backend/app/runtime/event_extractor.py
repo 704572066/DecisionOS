@@ -7,8 +7,8 @@ from app.runtime.events import DecisionEvent
 from app.runtime.models import RuntimeState
 
 
-_ACCEPT_TERMS = ("同意", "接受", "可以", "确认", "没问题", "认可")
-_REJECT_TERMS = ("不同意", "不接受", "不能", "拒绝", "不行")
+_ACCEPT_TERMS = ("同意", "接受", "没问题", "认可")
+_REJECT_TERMS = ("不同意", "不接受", "拒绝", "不行")
 _CONSTRAINT_TERMS = ("必须", "不得", "需要审批", "需审批", "前提是", "条件是")
 
 
