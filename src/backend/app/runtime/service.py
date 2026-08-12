@@ -71,6 +71,7 @@ class RuntimeStateService:
             semantic_enabled=bool(
                 getattr(settings, "semantic_event_enabled", True)
             ),
+            meeting_date=meeting.created_at,
         )
         state = runtime_state_reducer.apply(state, events)
         if latest_segment is not None:
@@ -135,6 +136,7 @@ class RuntimeStateService:
             semantic_enabled=bool(
                 getattr(settings, "semantic_event_enabled", True)
             ),
+            meeting_date=meeting.created_at,
         )
         if not events:
             return state

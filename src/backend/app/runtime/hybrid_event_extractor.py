@@ -23,12 +23,22 @@ class HybridEventExtractor:
         previous: RuntimeState | None,
         *,
         semantic_enabled: bool = True,
+        meeting_date=None,
     ) -> list[DecisionEvent]:
         rule_events = event_extractor.extract(meeting_id, text, previous)
         if not semantic_enabled:
             return rule_events
 
-        semantic = await semantic_event_extractor.extract(text, previous)
+        semantic_kwargs = (
+            {"meeting_date": meeting_date}
+            if meeting_date is not None
+            else {}
+        )
+        semantic = await semantic_event_extractor.extract(
+            text,
+            previous,
+            **semantic_kwargs,
+        )
         semantic_events = [
             self._to_runtime_event(meeting_id, event)
             for event in semantic

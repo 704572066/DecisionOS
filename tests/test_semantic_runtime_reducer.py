@@ -80,3 +80,56 @@ def test_commitments_accumulate_without_overwriting():
     )])
     items = runtime.decisionFacts["semanticState"]["commitment"]
     assert len(items) == 2
+
+
+def test_semantic_history_keeps_old_value_while_state_keeps_latest():
+    runtime = state()
+    runtime_state_reducer.apply(runtime, [semantic_event(
+        domain="delivery",
+        kind="constraint",
+        field="goLiveDate",
+        value="2026-10-01",
+        source="10月1日上线",
+    )])
+    second = semantic_event(
+        domain="delivery",
+        kind="constraint",
+        field="goLiveDate",
+        value="2026-10-15",
+        source="改成10月15日上线",
+    )
+    second.eventId = "e2"
+    runtime_state_reducer.apply(runtime, [second])
+
+    history = runtime.decisionFacts["semanticHistory"]
+    current = runtime.decisionFacts["semanticState"]["delivery"]
+    assert [item["value"] for item in history[-2:]] == ["2026-10-01", "2026-10-15"]
+    assert len(current) == 1
+    assert current[0]["value"] == "2026-10-15"
+
+
+def test_rejected_semantic_object_is_removed_from_current_state_but_kept_in_history():
+    runtime = state()
+    accepted = semantic_event(
+        domain="approval",
+        kind="dependency",
+        field="contractApproval",
+        value="集团法务确认",
+        source="需要集团法务确认",
+    )
+    accepted.metadata.update({"target": "合同签署", "actor": "third_party", "status": "pending"})
+    runtime_state_reducer.apply(runtime, [accepted])
+
+    rejected = semantic_event(
+        domain="approval",
+        kind="dependency",
+        field="contractApproval",
+        value="集团法务确认",
+        source="不再需要集团法务确认",
+    )
+    rejected.eventId = "e2"
+    rejected.metadata.update({"target": "合同签署", "actor": "third_party", "status": "withdrawn"})
+    runtime_state_reducer.apply(runtime, [rejected])
+
+    assert "approval" not in runtime.decisionFacts["semanticState"]
+    assert len(runtime.decisionFacts["semanticHistory"]) == 2

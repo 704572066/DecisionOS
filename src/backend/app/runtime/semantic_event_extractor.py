@@ -40,6 +40,9 @@ Important:
 - A statement may contain several events.
 - Preserve conditional commitments and approval dependencies.
 - Delivery dates, scope changes, resource limits, liabilities, commitments, approvals and decisions are first-class.
+- Contract terms belong to domain=contract. A required approval/review/authorization before signing or proceeding belongs to domain=approval, even when the object being approved is a contract.
+- actor must be one of customer|us|third_party|unknown. Use unknown unless the responsible party is explicit in the utterance/context. Never guess the speaker side.
+- Resolve relative dates and dates without a year using meetingDate supplied by the user prompt. Do not produce a past date unless the utterance clearly refers to the past.
 - Do not infer previousValue. Runtime owns previous state.
 - If there is no decision-relevant information, return {"events": []}.
 """
@@ -50,14 +53,23 @@ class SemanticEventExtractor:
         self,
         text: str,
         previous: RuntimeState | None,
+        *,
+        meeting_date=None,
     ) -> list[SemanticEventCandidate]:
         source = " ".join((text or "").split())
         if not source or not llm_provider.enabled:
             return []
 
         state_summary = self._state_summary(previous)
+        meeting_date_text = (
+            meeting_date.date().isoformat()
+            if hasattr(meeting_date, "date")
+            else str(meeting_date or "")
+        )
         user_prompt = (
-            "Current runtime state (context only; do not repeat it as a new event):\n"
+            "Meeting date (authoritative date anchor): "
+            + meeting_date_text
+            + "\nCurrent runtime state (context only; do not repeat it as a new event):\n"
             + json.dumps(state_summary, ensure_ascii=False)
             + "\n\nNew meeting utterance:\n"
             + source
@@ -73,6 +85,7 @@ class SemanticEventExtractor:
             return semantic_event_validator.validate(
                 envelope.events,
                 source_text=source,
+                meeting_date=meeting_date,
             )
         except Exception:
             logger.exception("Semantic event extraction failed")

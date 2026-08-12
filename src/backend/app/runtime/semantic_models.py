@@ -38,7 +38,7 @@ class SemanticEventCandidate(BaseModel):
     value: Any = None
     normalizedValue: Any = None
     relation: str = ""
-    actor: str = ""
+    actor: str = "unknown"
     target: str = ""
     status: str = ""
     sourceText: str
