@@ -3,12 +3,10 @@ from __future__ import annotations
 import re
 
 from app.decision_board.claim_guard import claim_guard
-from app.decision_board.signal_engine import DecisionSignalEngine
 from app.decision_board.models import (
     BoardAction,
     BoardEvidence,
     BoardRisk,
-    BoardTodo,
     DecisionBoard,
 )
 from app.runtime.models import RuntimeState
@@ -21,8 +19,6 @@ class DecisionBoardEngine:
         risks = self._risks(state)
         evidence = self._evidence(state)
         actions = self._actions(state)
-        todos = self._todos(state, risks)
-        signals = DecisionSignalEngine().build(list(state.recentEvents[-6:]))
         readiness = self._readiness(state, evidence)
         status = self._status(state, risks, readiness)
 
@@ -36,8 +32,6 @@ class DecisionBoardEngine:
             risks=risks[:3],
             evidence=evidence[:5],
             actions=actions[:3],
-            todos=todos[:5],
-            signals=signals,
             currentConditions=dict(state.decisionFacts),
             recentEvents=list(state.recentEvents[-6:]),
             resolvedRisks=list(state.resolvedRiskKeys),
@@ -62,6 +56,8 @@ class DecisionBoardEngine:
             summary = (reminder.get("summary") or "").strip()
 
             if self._is_stale_payment_risk(state, title, summary):
+                continue
+            if self._is_stale_discount_risk(state, title, summary):
                 continue
 
             title, summary = claim_guard.sanitize_risk(title, summary)
@@ -157,10 +153,18 @@ class DecisionBoardEngine:
             suggestion = (reminder.get("suggestion") or "").strip()
             if not suggestion:
                 continue
+            reminder_title = reminder.get("title") or ""
+            reminder_text = (reminder.get("summary") or "") + " " + suggestion
             if self._is_stale_payment_risk(
                 state,
-                reminder.get("title") or "",
-                (reminder.get("summary") or "") + " " + suggestion,
+                reminder_title,
+                reminder_text,
+            ):
+                continue
+            if self._is_stale_discount_risk(
+                state,
+                reminder_title,
+                reminder_text,
             ):
                 continue
             key = self._norm(suggestion)
@@ -177,51 +181,6 @@ class DecisionBoardEngine:
                     ][:3],
                 )
             )
-        return output
-
-    def _todos(self, state, risks):
-        output = []
-        seen = set()
-
-        def add(text, reason):
-            key = self._norm(text)
-            if key and key not in seen:
-                seen.add(key)
-                output.append(BoardTodo(text=text, reason=reason))
-
-        if any(topic in state.topics for topic in ("价格", "利润")):
-            add(
-                "确认当前方案的最低可接受毛利率与折扣边界",
-                "当前会议涉及价格/利润条件。",
-            )
-
-        payment_days = state.decisionFacts.get("paymentTermDays")
-        if "付款" in state.topics:
-            if payment_days is not None:
-                add(
-                    f"确认当前{payment_days}天付款周期对应的风险控制条件",
-                    "付款条件已发生结构化更新。",
-                )
-            else:
-                add(
-                    "确认可接受付款周期及对应风险控制条件",
-                    "当前会议涉及付款周期。",
-                )
-
-        for runtime_constraint in (
-            state.decisionFacts.get("runtimeConstraints") or []
-        ):
-            add(
-                "确认约束：" + runtime_constraint,
-                "会议中新增了约束条件。",
-            )
-
-        if any(item.severity == "high" for item in risks):
-            add(
-                "由负责人确认是否继续按当前条件推进谈判",
-                "当前存在高优先级风险，AI 不替代最终决策。",
-            )
-
         return output
 
     @staticmethod
@@ -287,6 +246,38 @@ class DecisionBoardEngine:
             for value in re.findall(r"(\d+)\s*天", text)
         ]
         return any(value > int(current) for value in old_days)
+
+    @staticmethod
+    def _is_stale_discount_risk(
+        state: RuntimeState,
+        title: str,
+        summary: str,
+    ) -> bool:
+        if "discount" not in state.resolvedRiskKeys:
+            return False
+
+        current = state.decisionFacts.get("discountPercent")
+        if current is None:
+            return False
+
+        # Use the reminder title to identify its primary risk. Summaries often
+        # contain policy/history percentages (for example 10% or 8%), which
+        # must not be mistaken for the current negotiated discount.
+        title_text = title or ""
+        if not any(
+            term in title_text
+            for term in ("折扣", "降价", "价格", "利润率", "毛利率")
+        ):
+            return False
+
+        percentages = [
+            float(value)
+            for value in re.findall(r"(\d+(?:\.\d+)?)\s*%", title_text)
+        ]
+        if not percentages:
+            return True
+
+        return any(value > float(current) for value in percentages)
 
     @staticmethod
     def _norm(text):

@@ -26,13 +26,6 @@ type DecisionCandidate = {
 };
 
 
-type DecisionSignal = {
-  level: "NOW" | "NEXT" | "LATER";
-  type: string;
-  title: string;
-  message: string;
-};
-
 type DecisionBoard = {
   meetingId: string;
   projectId: string;
@@ -43,9 +36,7 @@ type DecisionBoard = {
   risks: Array<{title:string;summary:string;severity:'low'|'medium'|'high';sourceIds:string[]}>;
   evidence: Array<{id:string;type:string;title:string;summary:string;score:number}>;
   actions: Array<{text:string;sourceIds:string[]}>;
-  todos: Array<{text:string;reason:string}>;
   currentConditions: Record<string, unknown>;
-  signals?: DecisionSignal[];
   recentEvents: Array<{
     eventId:string;
     type:string;
@@ -919,48 +910,23 @@ function App() {
                 <div className="readiness-track"><div className="readiness-value" style={{width: `${decisionBoard.decisionReadiness}%`}} /></div>
               </div>
 
-              <section className="board-section signal-layer">
-                <div className="board-section-title">
-                  <strong>🤖 AI Decision Signal</strong>
-                </div>
-
-                {(decisionBoard.signals || []).map((signal) => (
-                  <article
-                    key={`${signal.level}-${signal.title}`}
-                    className={`signal-card signal-${signal.level}`}
-                  >
-                    <strong>{signal.title}</strong>
-                    <p>{signal.message}</p>
-                  </article>
-                ))}
-              </section>
-
               <section className="board-section priority-layer">
-                <div className="board-section-title"><strong>🔴 NOW 当前关注</strong></div>
+                <div className="board-section-title"><strong>🔴 当前关注</strong></div>
                 {decisionBoard.risks.slice(0, 2).map((risk) => (
                   <article key={`${risk.title}-${risk.summary}`} className={`board-risk signal-risk severity-${risk.severity}`}>
                     <span className="risk-dot" />
                     <div><strong>{risk.title}</strong><p>{risk.summary}</p></div>
                   </article>
                 ))}
-                {decisionBoard.resolvedRisks.includes('payment_term') && (
-                  <div className="board-resolved">✓ 风险解除：付款条件已缓解</div>
-                )}
               </section>
 
               <section className="board-section priority-layer">
-                <div className="board-section-title"><strong>🟡 NEXT 下一步行动</strong></div>
+                <div className="board-section-title"><strong>🟡 下一步行动</strong></div>
                 <ol className="board-actions">
                   {decisionBoard.actions.slice(0, 3).map((action) => <li key={action.text}>{action.text}</li>)}
                 </ol>
               </section>
 
-              <section className="board-section priority-layer">
-                <div className="board-section-title"><strong>⚪ LATER 待确认</strong></div>
-                {decisionBoard.todos.slice(0, 3).map((todo) => (
-                  <div className="board-todo" key={todo.text}><span>□</span><span>{todo.text}</span></div>
-                ))}
-              </section>
               <div className="decision-board-links">
                 <button className="secondary-button" onClick={() => setReminderDrawerOpen(true)}>
                   查看提醒 {reminders.length ? `(${reminders.length})` : ''}
