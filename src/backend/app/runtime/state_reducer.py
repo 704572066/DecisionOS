@@ -49,14 +49,18 @@ class RuntimeStateReducer:
                     new_value,
                 )
 
-                # Keep the discount lifecycle derived from the current fact,
-                # not from whether a separate RiskResolved event happened to be
-                # emitted. This makes 18% -> 8% -> 18% deterministic.
+                # Sprint 3-3: discount risk lifecycle
+                discount_risk_key = "discount"
+
+                # 折扣重新进入风险区：重新打开风险
                 if new_value > 10:
-                    if "discount" in resolved:
-                        resolved.remove("discount")
-                elif "discount" not in resolved:
-                    resolved.append("discount")
+                    if discount_risk_key in resolved:
+                        resolved.remove(discount_risk_key)
+
+                # 折扣进入安全区：标记风险解除
+                elif new_value <= 10:
+                    if discount_risk_key not in resolved:
+                        resolved.append(discount_risk_key)
 
             elif event.type == "PaymentTermChanged" and event.value is not None:
                 new_value = int(event.value)
@@ -77,12 +81,21 @@ class RuntimeStateReducer:
 
                 # If payment terms worsen after being resolved, re-open the
                 # payment risk instead of leaving stale resolved state behind.
+                payment_risk_key = "payment_term"
                 if (
                     previous_value is not None
-                    and new_value > int(previous_value)
-                    and "payment_term" in resolved
+                    and new_value > 120
+                    and payment_risk_key in resolved
                 ):
-                    resolved.remove("payment_term")
+                    # resolved.remove("payment_term")
+                    resolved.remove(payment_risk_key)
+                elif (
+                    previous_value is not None
+                    and new_value <= 120
+                    and payment_risk_key not in resolved
+                ):
+                    # resolved.remove("payment_term")
+                    resolved.append(payment_risk_key)
 
             elif event.type == "ConstraintAdded":
                 constraints = list(facts.get("runtimeConstraints") or [])
@@ -107,7 +120,8 @@ class RuntimeStateReducer:
                     key = "payment_term"
                 elif event.field == "discountPercent":
                     key = "discount"
-
+                else:
+                    key = None
                 if key and key not in resolved:
                     resolved.append(key)
 

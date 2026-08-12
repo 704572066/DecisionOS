@@ -57,7 +57,7 @@ class EventExtractor:
                             field="discountPercent",
                             previous=old,
                             value=discount,
-                            metadata={"reason": "discount_back_within_threshold"},
+                            metadata={"reason": "discount_improved"},
                         )
                     )
 
