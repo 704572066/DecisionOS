@@ -45,6 +45,7 @@ class RuntimeStateService:
                 if previous
                 else self._decision_facts_from_context(context)
             ),
+            decisionState=(dict(previous.decisionState) if previous else {}),
             recentEvents=list(previous.recentEvents) if previous else [],
             resolvedRiskKeys=list(previous.resolvedRiskKeys) if previous else [],
             diagnostics={

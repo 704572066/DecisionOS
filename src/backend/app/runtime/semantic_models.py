@@ -18,6 +18,16 @@ SemanticDomain = Literal[
     "other",
 ]
 
+SemanticRole = Literal[
+    "requirement",
+    "proposal",
+    "commitment",
+    "acceptance",
+    "assessment",
+    "dependency",
+    "unknown",
+]
+
 SemanticKind = Literal[
     "fact_change",
     "constraint",
@@ -38,6 +48,7 @@ class SemanticEventCandidate(BaseModel):
     value: Any = None
     normalizedValue: Any = None
     relation: str = ""
+    role: SemanticRole = "unknown"
     actor: str = "unknown"
     target: str = ""
     status: str = ""

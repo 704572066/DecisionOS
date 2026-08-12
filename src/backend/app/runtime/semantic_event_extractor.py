@@ -25,6 +25,7 @@ Your output schema is:
       "value": "literal value from the utterance when useful",
       "normalizedValue": "normalized machine value when safely inferable, otherwise null",
       "relation": "<=|>=|=|requires|depends_on|conditional_on|adds|removes|replaces or empty string",
+      "role": "requirement|proposal|commitment|acceptance|assessment|dependency|unknown",
       "actor": "speaker/party when explicit, otherwise empty string",
       "target": "affected object when explicit, otherwise empty string",
       "status": "accepted|rejected|proposed|pending|confirmed|withdrawn or empty string",
@@ -39,6 +40,7 @@ Important:
 - Extract meaning, not keywords.
 - A statement may contain several events.
 - Preserve conditional commitments and approval dependencies.
+- role describes how the statement functions in the negotiation: requirement, proposal, commitment, acceptance, assessment, or dependency.
 - Delivery dates, scope changes, resource limits, liabilities, commitments, approvals and decisions are first-class.
 - Contract terms belong to domain=contract. A required approval/review/authorization before signing or proceeding belongs to domain=approval, even when the object being approved is a contract.
 - actor must be one of customer|us|third_party|unknown. Use unknown unless the responsible party is explicit in the utterance/context. Never guess the speaker side.

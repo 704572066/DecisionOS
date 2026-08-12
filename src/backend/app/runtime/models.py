@@ -20,6 +20,8 @@ class RuntimeState(BaseModel):
 
     # Sprint 3-2.2 runtime-only decision state.
     decisionFacts: dict = Field(default_factory=dict)
+    # Sprint 3-3.3.2: current effective decision conditions resolved from semanticState.
+    decisionState: dict = Field(default_factory=dict)
     recentEvents: list[dict] = Field(default_factory=list)
     resolvedRiskKeys: list[str] = Field(default_factory=list)
 

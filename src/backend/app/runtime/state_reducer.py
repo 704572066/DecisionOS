@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.runtime.decision_state import decision_state_resolver
 from app.runtime.events import DecisionEvent
 from app.runtime.models import RuntimeState
 
@@ -37,6 +38,7 @@ class RuntimeStateReducer:
             "field": event.field,
             "value": event.value,
             "relation": metadata.get("relation") or "",
+            "role": metadata.get("role") or "unknown",
             "actor": metadata.get("actor") or "unknown",
             "target": metadata.get("target") or "",
             "status": metadata.get("status") or "",
@@ -57,7 +59,7 @@ class RuntimeStateReducer:
         semantic_state = dict(facts.get("semanticState") or {})
         domain_items = list(semantic_state.get(domain) or [])
 
-        slot = (kind, event.field or "", item["target"], item["actor"])
+        slot = (kind, event.field or "", item["target"], item["actor"], item["role"])
 
         def same_slot(current: dict) -> bool:
             return (
@@ -65,6 +67,7 @@ class RuntimeStateReducer:
                 and (current.get("field") or "") == slot[1]
                 and (current.get("target") or "") == slot[2]
                 and (current.get("actor") or "unknown") == slot[3]
+                and (current.get("role") or "unknown") == slot[4]
             )
 
         # Explicit withdrawal/rejection invalidates the current object in the
@@ -91,6 +94,7 @@ class RuntimeStateReducer:
                     and current.get("relation") == item["relation"]
                     and current.get("actor") == item["actor"]
                     and current.get("target") == item["target"]
+                    and (current.get("role") or "unknown") == item["role"]
                     for current in domain_items
                 )
                 if not duplicate:
@@ -211,6 +215,9 @@ class RuntimeStateReducer:
             recent.append(event.model_dump(mode="json"))
 
         state.decisionFacts = facts
+        state.decisionState = decision_state_resolver.resolve(
+            facts.get("semanticState") or {}
+        )
         state.resolvedRiskKeys = resolved[-20:]
         state.recentEvents = recent[-20:]
         return state

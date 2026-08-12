@@ -40,6 +40,7 @@ class SemanticEventValidator:
                 (candidate.sourceText or source).split()
             ) or source
 
+            self._normalize_role(candidate)
             self._normalize_actor(candidate)
             self._normalize_approval_domain(candidate)
             self._normalize_date(candidate, anchor)
@@ -53,6 +54,7 @@ class SemanticEventValidator:
                 candidate.field,
                 str(candidate.normalizedValue),
                 candidate.relation,
+                candidate.role,
                 candidate.actor,
                 candidate.target,
                 candidate.sourceText,
@@ -71,6 +73,33 @@ class SemanticEventValidator:
         if isinstance(value, date):
             return value
         return None
+
+
+    @staticmethod
+    def _normalize_role(event: SemanticEventCandidate) -> None:
+        allowed = {
+            "requirement",
+            "proposal",
+            "commitment",
+            "acceptance",
+            "assessment",
+            "dependency",
+            "unknown",
+        }
+        role = (event.role or "unknown").strip().lower()
+        if role in allowed:
+            event.role = role
+            return
+        if event.kind == "dependency":
+            event.role = "dependency"
+        elif event.kind == "commitment":
+            event.role = "commitment"
+        elif event.status == "accepted":
+            event.role = "acceptance"
+        elif event.status == "proposed":
+            event.role = "proposal"
+        else:
+            event.role = "unknown"
 
     @staticmethod
     def _normalize_actor(event: SemanticEventCandidate) -> None:

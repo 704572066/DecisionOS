@@ -32,7 +32,13 @@ class DecisionBoardEngine:
             risks=risks[:3],
             evidence=evidence[:5],
             actions=actions[:3],
-            currentConditions=dict(state.decisionFacts),
+            currentConditions={
+                **dict(state.decisionFacts),
+                "decisionState": dict(state.decisionState),
+                "semanticState": dict(
+                    state.decisionFacts.get("semanticState") or {}
+                ),
+            },
             recentEvents=list(state.recentEvents[-6:]),
             resolvedRisks=list(state.resolvedRiskKeys),
             updatedAt=state.updatedAt,
