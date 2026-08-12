@@ -51,7 +51,14 @@ class RuntimeStateService:
             },
         )
 
-        latest_text = self._latest_final_segment_text(db, meeting.id)
+        latest_segment = self._latest_final_segment(db,meeting.id,)
+
+        latest_text = (
+            latest_segment.text.strip()
+            if latest_segment
+            else state.canonicalContext
+        )
+
         if not latest_text:
             latest_text = state.canonicalContext
 
@@ -61,6 +68,10 @@ class RuntimeStateService:
             previous,
         )
         state = runtime_state_reducer.apply(state, events)
+        if latest_segment is not None:
+            state.lastProcessedSegmentSequence = (
+                latest_segment.sequence
+            )
         state.diagnostics["eventsExtracted"] = len(events)
 
         return runtime_state_store.put(state)
@@ -75,28 +86,32 @@ class RuntimeStateService:
         if cached is None:
             return await self.refresh(db, meeting)
 
-        latest_text = self._latest_final_segment_text(
+        latest_segment = self._latest_final_segment(
             db,
             meeting.id,
         )
 
-        if not latest_text:
+        if latest_segment is None:
             return cached
 
-        already_processed = any(
-            event.get("sourceText") == latest_text
-            for event in cached.recentEvents
-        )
-
-        if already_processed:
+        if (
+            latest_segment.sequence
+            <= cached.lastProcessedSegmentSequence
+        ):
             return cached
 
         updated = self.apply_transcript_event(
             meeting,
-            latest_text,
+            latest_segment.text,
         )
 
-        return updated or cached
+        if updated is not None:
+            updated.lastProcessedSegmentSequence = (
+                latest_segment.sequence
+            )
+            return runtime_state_store.put(updated)
+
+        return cached
 
     def apply_transcript_event(
         self,
@@ -158,21 +173,22 @@ class RuntimeStateService:
         return output
 
     @staticmethod
-    def _latest_final_segment_text(
+    def _latest_final_segment(
         db: Session,
         meeting_id: str,
-    ) -> str:
+    ) -> MeetingTranscriptSegment | None:
         stmt = (
             select(MeetingTranscriptSegment)
             .where(
                 MeetingTranscriptSegment.meeting_id == meeting_id,
                 MeetingTranscriptSegment.is_final.is_(True),
             )
-            .order_by(MeetingTranscriptSegment.sequence.desc())
+            .order_by(
+                MeetingTranscriptSegment.sequence.desc()
+            )
             .limit(1)
         )
-        segment = db.scalar(stmt)
-        return segment.text.strip() if segment else ""
 
+        return db.scalar(stmt)
 
 runtime_state_service = RuntimeStateService()

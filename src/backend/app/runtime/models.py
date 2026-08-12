@@ -27,3 +27,4 @@ class RuntimeState(BaseModel):
         default_factory=lambda: datetime.now(timezone.utc)
     )
     diagnostics: dict = Field(default_factory=dict)
+    lastProcessedSegmentSequence: int = 0
