@@ -5,15 +5,25 @@ from uuid import uuid4
 from app.runtime.event_extractor import event_extractor
 from app.runtime.events import DecisionEvent
 from app.runtime.models import RuntimeState
-from app.runtime.semantic_event_extractor import semantic_event_extractor
-from app.runtime.semantic_models import SemanticEventCandidate
+from app.runtime.semantic_event_extractor import (
+    semantic_event_extractor,
+)
+from app.runtime.semantic_models import (
+    SemanticEventCandidate,
+)
 
 
 class HybridEventExtractor:
-    """Combine stable fast rules with schema-guided semantic extraction.
+    """Combine deterministic runtime events and semantic decision events.
 
-    Deterministic rules remain authoritative for the already-verified price and
-    payment paths. Semantic extraction supplements broader decision domains.
+    Rule events maintain fast structured facts such as discountPercent and
+    paymentTermDays.
+
+    Semantic events maintain meaning such as requirement, proposal,
+    commitment, acceptance and dependency.
+
+    Both event types may legitimately describe the same transcript segment
+    and therefore must coexist.
     """
 
     async def extract(
@@ -25,7 +35,13 @@ class HybridEventExtractor:
         semantic_enabled: bool = True,
         meeting_date=None,
     ) -> list[DecisionEvent]:
-        rule_events = event_extractor.extract(meeting_id, text, previous)
+
+        rule_events = event_extractor.extract(
+            meeting_id,
+            text,
+            previous,
+        )
+
         if not semantic_enabled:
             return rule_events
 
@@ -34,34 +50,34 @@ class HybridEventExtractor:
             if meeting_date is not None
             else {}
         )
+
         semantic = await semantic_event_extractor.extract(
             text,
             previous,
             **semantic_kwargs,
         )
-        semantic_events = [
-            self._to_runtime_event(meeting_id, event)
-            for event in semantic
-            if not self._covered_by_rule_event(event, rule_events)
-        ]
-        return self._dedupe([*rule_events, *semantic_events])
 
-    @staticmethod
-    def _covered_by_rule_event(
-        event: SemanticEventCandidate,
-        rule_events: list[DecisionEvent],
-    ) -> bool:
-        if event.field == "discountPercent":
-            return any(item.type == "PriceChanged" for item in rule_events)
-        if event.field == "paymentTermDays":
-            return any(item.type == "PaymentTermChanged" for item in rule_events)
-        return False
+        semantic_events = [
+            self._to_runtime_event(
+                meeting_id,
+                event,
+            )
+            for event in semantic
+        ]
+
+        return self._dedupe(
+            [
+                *rule_events,
+                *semantic_events,
+            ]
+        )
 
     @staticmethod
     def _to_runtime_event(
         meeting_id: str,
         event: SemanticEventCandidate,
     ) -> DecisionEvent:
+
         return DecisionEvent(
             eventId="event-" + uuid4().hex[:12],
             type="SemanticObjectRecorded",
@@ -87,22 +103,45 @@ class HybridEventExtractor:
         )
 
     @staticmethod
-    def _dedupe(events: list[DecisionEvent]) -> list[DecisionEvent]:
+    def _dedupe(
+        events: list[DecisionEvent],
+    ) -> list[DecisionEvent]:
+
         seen = set()
         output = []
+
         for event in events:
             key = (
                 event.type,
                 event.field,
                 str(event.value),
                 event.sourceText,
-                str(event.metadata.get("domain", "")),
-                str(event.metadata.get("kind", "")),
+                str(
+                    event.metadata.get(
+                        "domain",
+                        "",
+                    )
+                ),
+                str(
+                    event.metadata.get(
+                        "kind",
+                        "",
+                    )
+                ),
+                str(
+                    event.metadata.get(
+                        "role",
+                        "",
+                    )
+                ),
             )
+
             if key in seen:
                 continue
+
             seen.add(key)
             output.append(event)
+
         return output
 
 
