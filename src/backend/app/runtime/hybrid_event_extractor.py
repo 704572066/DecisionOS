@@ -77,6 +77,7 @@ class HybridEventExtractor:
                 "domain": event.domain,
                 "kind": event.kind,
                 "relation": event.relation,
+                "role": event.role,
                 "actor": event.actor,
                 "target": event.target,
                 "status": event.status,
