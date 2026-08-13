@@ -33,11 +33,13 @@ class DecisionStateResolver:
     }
 
     STATUS_PRIORITY = {
-        "confirmed": 50,
-        "accepted": 45,
-        "pending": 30,
-        "proposed": 20,
-        "": 0,
+        "confirmed":100,
+        "accepted":90,
+        "active":80,
+        "pending":40,
+        "proposed":20,
+        "withdrawn":-100,
+        "rejected":-100,
     }
 
     # Roles that may represent a current commercial/delivery working state.

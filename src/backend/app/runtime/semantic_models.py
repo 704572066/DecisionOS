@@ -40,6 +40,20 @@ SemanticKind = Literal[
     "unknown",
 ]
 
+class SemanticRevisionEvent(BaseModel):
+    type: str = "SemanticRevision"
+
+    field: str
+
+    previousValue: Any | None = None
+
+    currentValue: Any | None = None
+
+    previousStatus: str | None = None
+
+    currentStatus: str | None = None
+
+    sourceText: str = ""
 
 class SemanticEventCandidate(BaseModel):
     domain: SemanticDomain
