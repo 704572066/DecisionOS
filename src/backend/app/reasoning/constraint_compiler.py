@@ -34,18 +34,21 @@ class ConstraintCompilerBackend(ABC):
     """
     Pluggable semantic compilation backend.
 
+    The backend converts enterprise knowledge into the generic
+    EvaluationConstraint DSL.
+
     Implementations may use:
     - LLM
     - rule service
     - external policy engine
     - precompiled constraints
 
-    The orchestration layer does not depend on how semantic
-    interpretation is performed.
+    Business semantics belong to the backend input/interpretation,
+    not to ConstraintCompiler itself.
     """
 
     @abstractmethod
-    def compile_knowledge(
+    async def compile_knowledge(
         self,
         *,
         knowledge: EvaluationKnowledge,
@@ -58,14 +61,12 @@ class NullConstraintCompilerBackend(
     ConstraintCompilerBackend
 ):
     """
-    Default backend before an actual semantic compiler is configured.
+    Safe default backend.
 
-    Important:
-    We intentionally do NOT infer business rules here using keywords
-    or hard-coded thresholds.
+    It deliberately performs no semantic inference.
     """
 
-    def compile_knowledge(
+    async def compile_knowledge(
         self,
         *,
         knowledge: EvaluationKnowledge,
@@ -90,7 +91,7 @@ class ConstraintCompiler:
                 ↓
         valid constraints
 
-    This class intentionally contains no enterprise-specific rules.
+    This layer contains no enterprise-specific interpretation.
     """
 
     def __init__(
@@ -110,7 +111,7 @@ class ConstraintCompiler:
             else constraint_validator
         )
 
-    def compile(
+    async def compile(
         self,
         context: EvaluationContext,
     ) -> ConstraintCompilationResult:
@@ -124,9 +125,11 @@ class ConstraintCompiler:
             attempted += 1
 
             try:
-                constraints = self.backend.compile_knowledge(
-                    knowledge=knowledge,
-                    context=context,
+                constraints = (
+                    await self.backend.compile_knowledge(
+                        knowledge=knowledge,
+                        context=context,
+                    )
                 )
 
                 compiled.extend(constraints)
@@ -150,11 +153,19 @@ class ConstraintCompiler:
                 "knowledgeCount": len(context.knowledge),
                 "attemptedKnowledgeCount": attempted,
                 "compiledConstraintCount": len(compiled),
-                "validConstraintCount": len(valid_constraints),
-                "rejectedConstraintCount": len(rejected),
-                "backendErrorCount": len(backend_errors),
+                "validConstraintCount": len(
+                    valid_constraints
+                ),
+                "rejectedConstraintCount": len(
+                    rejected
+                ),
+                "backendErrorCount": len(
+                    backend_errors
+                ),
                 "backendErrors": backend_errors,
-                "backend": type(self.backend).__name__,
+                "backend": type(
+                    self.backend
+                ).__name__,
             },
         )
 

@@ -34,6 +34,11 @@ from app.reasoning.constraint_validator import (
     constraint_validator,
 )
 
+from app.reasoning.llm_constraint_compiler import (
+    ConstraintCompilationEnvelope,
+    LLMConstraintCompilerBackend,
+)
+
 __all__ = [
     "ConstraintEffect",
     "ConstraintOperand",
@@ -59,4 +64,6 @@ __all__ = [
     "ConstraintValidator",
     "constraint_compiler",
     "constraint_validator",
+    "ConstraintCompilationEnvelope",
+    "LLMConstraintCompilerBackend",
 ]
