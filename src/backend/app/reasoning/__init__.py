@@ -44,6 +44,11 @@ from app.reasoning.subject_resolver import (
     SubjectResolver,
     subject_resolver,
 )
+from app.reasoning.operator_evaluator import (
+    OperatorEvaluationResult,
+    OperatorEvaluator,
+    operator_evaluator,
+)
 
 __all__ = [
     "ConstraintEffect",
@@ -75,4 +80,7 @@ __all__ = [
     "SubjectResolution",
     "SubjectResolver",
     "subject_resolver",
+    "OperatorEvaluationResult",
+    "OperatorEvaluator",
+    "operator_evaluator",
 ]
