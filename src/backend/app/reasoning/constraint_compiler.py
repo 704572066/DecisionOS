@@ -1,0 +1,162 @@
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from typing import Any
+
+from app.reasoning.context import (
+    EvaluationConstraint,
+    EvaluationContext,
+    EvaluationKnowledge,
+)
+from app.reasoning.constraint_validator import (
+    ConstraintValidator,
+    constraint_validator,
+)
+
+
+@dataclass
+class ConstraintCompilationResult:
+    constraints: list[EvaluationConstraint] = field(
+        default_factory=list
+    )
+
+    rejected: list[dict[str, Any]] = field(
+        default_factory=list
+    )
+
+    diagnostics: dict[str, Any] = field(
+        default_factory=dict
+    )
+
+
+class ConstraintCompilerBackend(ABC):
+    """
+    Pluggable semantic compilation backend.
+
+    Implementations may use:
+    - LLM
+    - rule service
+    - external policy engine
+    - precompiled constraints
+
+    The orchestration layer does not depend on how semantic
+    interpretation is performed.
+    """
+
+    @abstractmethod
+    def compile_knowledge(
+        self,
+        *,
+        knowledge: EvaluationKnowledge,
+        context: EvaluationContext,
+    ) -> list[EvaluationConstraint]:
+        raise NotImplementedError
+
+
+class NullConstraintCompilerBackend(
+    ConstraintCompilerBackend
+):
+    """
+    Default backend before an actual semantic compiler is configured.
+
+    Important:
+    We intentionally do NOT infer business rules here using keywords
+    or hard-coded thresholds.
+    """
+
+    def compile_knowledge(
+        self,
+        *,
+        knowledge: EvaluationKnowledge,
+        context: EvaluationContext,
+    ) -> list[EvaluationConstraint]:
+        return []
+
+
+class ConstraintCompiler:
+    """
+    Constraint compilation orchestration layer.
+
+    Pipeline:
+
+        EvaluationKnowledge
+                ↓
+        semantic compiler backend
+                ↓
+        EvaluationConstraint[]
+                ↓
+        ConstraintValidator
+                ↓
+        valid constraints
+
+    This class intentionally contains no enterprise-specific rules.
+    """
+
+    def __init__(
+        self,
+        backend: ConstraintCompilerBackend | None = None,
+        validator: ConstraintValidator | None = None,
+    ) -> None:
+        self.backend = (
+            backend
+            if backend is not None
+            else NullConstraintCompilerBackend()
+        )
+
+        self.validator = (
+            validator
+            if validator is not None
+            else constraint_validator
+        )
+
+    def compile(
+        self,
+        context: EvaluationContext,
+    ) -> ConstraintCompilationResult:
+        compiled: list[EvaluationConstraint] = []
+
+        backend_errors: list[dict[str, Any]] = []
+
+        attempted = 0
+
+        for knowledge in context.knowledge:
+            attempted += 1
+
+            try:
+                constraints = self.backend.compile_knowledge(
+                    knowledge=knowledge,
+                    context=context,
+                )
+
+                compiled.extend(constraints)
+
+            except Exception as exc:
+                backend_errors.append(
+                    {
+                        "knowledgeId": knowledge.id,
+                        "error": str(exc),
+                    }
+                )
+
+        valid_constraints, rejected = (
+            self.validator.validate_many(compiled)
+        )
+
+        return ConstraintCompilationResult(
+            constraints=valid_constraints,
+            rejected=rejected,
+            diagnostics={
+                "knowledgeCount": len(context.knowledge),
+                "attemptedKnowledgeCount": attempted,
+                "compiledConstraintCount": len(compiled),
+                "validConstraintCount": len(valid_constraints),
+                "rejectedConstraintCount": len(rejected),
+                "backendErrorCount": len(backend_errors),
+                "backendErrors": backend_errors,
+                "backend": type(self.backend).__name__,
+            },
+        )
+
+
+constraint_compiler = ConstraintCompiler()

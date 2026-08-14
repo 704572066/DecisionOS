@@ -21,6 +21,19 @@ from app.reasoning.models import (
     FindingType,
 )
 
+from app.reasoning.constraint_compiler import (
+    ConstraintCompilationResult,
+    ConstraintCompiler,
+    ConstraintCompilerBackend,
+    NullConstraintCompilerBackend,
+    constraint_compiler,
+)
+from app.reasoning.constraint_validator import (
+    ConstraintValidationResult,
+    ConstraintValidator,
+    constraint_validator,
+)
+
 __all__ = [
     "ConstraintEffect",
     "ConstraintOperand",
@@ -38,4 +51,12 @@ __all__ = [
     "FindingStatus",
     "FindingType",
     "evaluation_context_builder",
+    "ConstraintCompilationResult",
+    "ConstraintCompiler",
+    "ConstraintCompilerBackend",
+    "NullConstraintCompilerBackend",
+    "ConstraintValidationResult",
+    "ConstraintValidator",
+    "constraint_compiler",
+    "constraint_validator",
 ]
