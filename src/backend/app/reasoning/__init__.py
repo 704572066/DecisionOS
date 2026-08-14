@@ -4,6 +4,10 @@ from app.reasoning.context import (
     EvaluationKnowledge,
     EvaluationSubject,
 )
+from app.reasoning.context_builder import (
+    EvaluationContextBuilder,
+    evaluation_context_builder,
+)
 from app.reasoning.models import (
     Finding,
     FindingEvidence,
@@ -16,6 +20,7 @@ from app.reasoning.models import (
 __all__ = [
     "EvaluationConstraint",
     "EvaluationContext",
+    "EvaluationContextBuilder",
     "EvaluationKnowledge",
     "EvaluationSubject",
     "Finding",
@@ -24,4 +29,5 @@ __all__ = [
     "FindingSet",
     "FindingStatus",
     "FindingType",
+    "evaluation_context_builder",
 ]
