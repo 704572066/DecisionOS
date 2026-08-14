@@ -488,6 +488,127 @@ Do not overwrite semantic ownership and claim that the customer changed
 their requirement.
 
 ======================================================================
+POSITION TRANSITIONS AND REJECTION
+======================================================================
+
+A new utterance may change the lifecycle status of an EXISTING semantic
+position.
+
+When the new utterance explicitly rejects, withdraws, accepts, supersedes,
+or replaces an earlier position, emit a semantic event for the EXISTING
+position whose status changed.
+
+Use Current Runtime State to identify:
+- the field,
+- value,
+- actor,
+- role,
+- and semantic ownership
+of the referenced prior position.
+
+Do NOT assign the actor of the rejection sentence to the old semantic
+position automatically.
+
+The actor on the transition event represents the OWNER of the semantic
+position whose lifecycle changed.
+
+Example:
+
+Previous semantic state:
+us / discountPercent / 15 / commitment / confirmed
+
+New utterance:
+客户不同意15%，只接受10%
+
+Emit TWO events.
+
+Event 1:
+{
+  "domain": "commercial",
+  "kind": "fact_change",
+  "field": "discountPercent",
+  "value": 15,
+  "normalizedValue": 15,
+  "relation": "=",
+  "role": "commitment",
+  "actor": "us",
+  "target": "discount",
+  "status": "rejected",
+  "sourceText": "客户不同意15%"
+}
+
+Reason:
+The rejected semantic position is OUR prior 15% commitment.
+The customer is performing the rejection, but the semantic position being
+transitioned belongs to us.
+
+Event 2:
+{
+  "domain": "commercial",
+  "kind": "fact_change",
+  "field": "discountPercent",
+  "value": 10,
+  "normalizedValue": 10,
+  "relation": "=",
+  "role": "requirement",
+  "actor": "customer",
+  "target": "discount",
+  "status": "confirmed",
+  "sourceText": "只接受10%"
+}
+
+Reason:
+The customer is establishing its current acceptable boundary.
+
+--------------------------------------------------
+
+Example:
+
+Previous semantic state:
+customer / paymentTermDays / 180 / requirement / confirmed
+
+New utterance:
+我们不能接受180天，最多接受90天。
+
+Emit TWO semantic events:
+
+1. customer / paymentTermDays / 180
+   role = requirement
+   status = rejected
+
+2. us / paymentTermDays / 90
+   role = commitment or proposal depending on whether the wording establishes
+   a firm working position
+   status = confirmed or proposed accordingly
+
+--------------------------------------------------
+
+Example:
+
+Previous semantic state:
+us / discountPercent / 10 / proposal / proposed
+
+New utterance:
+刚才10%的方案先作废。
+
+Emit an event for the EXISTING us/10% position:
+
+actor = us
+value = 10
+status = withdrawn
+
+Do not create a new active 10% position.
+
+--------------------------------------------------
+
+A rejection or withdrawal event must preserve the original actor and role
+of the position being transitioned whenever Current Runtime State makes
+that prior position identifiable.
+
+If the prior position cannot be identified with sufficient confidence,
+do not invent ownership. Use actor=unknown and lower confidence instead.
+
+======================================================================
 MULTIPLE EVENTS
 ======================================================================
 
@@ -506,6 +627,9 @@ Extract separate semantic events for:
 - legal approval dependency
 
 Do not compress the entire sentence into one event.
+
+When one utterance both changes an existing position and establishes a new
+position, emit both events separately.
 
 ======================================================================
 NO DECISION-RELEVANT INFORMATION
