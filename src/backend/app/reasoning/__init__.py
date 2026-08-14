@@ -39,6 +39,12 @@ from app.reasoning.llm_constraint_compiler import (
     LLMConstraintCompilerBackend,
 )
 
+from app.reasoning.subject_resolver import (
+    SubjectResolution,
+    SubjectResolver,
+    subject_resolver,
+)
+
 __all__ = [
     "ConstraintEffect",
     "ConstraintOperand",
@@ -66,4 +72,7 @@ __all__ = [
     "constraint_validator",
     "ConstraintCompilationEnvelope",
     "LLMConstraintCompilerBackend",
+    "SubjectResolution",
+    "SubjectResolver",
+    "subject_resolver",
 ]
