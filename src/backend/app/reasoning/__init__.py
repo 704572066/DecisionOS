@@ -49,7 +49,11 @@ from app.reasoning.operator_evaluator import (
     OperatorEvaluator,
     operator_evaluator,
 )
-
+from app.reasoning.constraint_evaluator import (
+    ConstraintEvaluationResult,
+    ConstraintEvaluator,
+    constraint_evaluator,
+)
 __all__ = [
     "ConstraintEffect",
     "ConstraintOperand",
@@ -83,4 +87,7 @@ __all__ = [
     "OperatorEvaluationResult",
     "OperatorEvaluator",
     "operator_evaluator",
+    "ConstraintEvaluationResult",
+    "ConstraintEvaluator",
+    "constraint_evaluator",
 ]
