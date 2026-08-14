@@ -8,6 +8,36 @@ from app.runtime.models import RuntimeState
 
 
 class RuntimeStateReducer:
+    FIELD_ALIASES = {
+        "priceReduction": "discountPercent",
+        "discountPercent": "discountPercent",
+
+        "paymentTerms": "paymentTermDays",
+        "paymentTermDays": "paymentTermDays",
+
+        "deliveryDate": "goLiveDate",
+        "deadline": "goLiveDate",
+        "goLiveDate": "goLiveDate",
+
+        "teamSize": "maxTeamSize",
+        "maxTeamSize": "maxTeamSize",
+    }
+
+    @classmethod
+    def _canonical_field(
+        cls,
+        field: str | None,
+    ) -> str:
+        raw = str(field or "").strip()
+
+        if not raw:
+            return ""
+
+        return cls.FIELD_ALIASES.get(
+            raw,
+            raw,
+        )
+
     @staticmethod
     def _clear_stale_accepted_condition(
         facts: dict,
@@ -15,23 +45,31 @@ class RuntimeStateReducer:
         previous_value,
         new_value,
     ) -> None:
-        last_accepted = facts.get("lastAcceptedCondition")
+        last_accepted = facts.get(
+            "lastAcceptedCondition"
+        )
 
         if (
             last_accepted
             and previous_value is not None
             and new_value != previous_value
-            and str(event.sourceText).strip() != str(last_accepted).strip()
+            and str(event.sourceText).strip()
+            != str(last_accepted).strip()
         ):
-            facts.pop("lastAcceptedCondition", None)
+            facts.pop(
+                "lastAcceptedCondition",
+                None,
+            )
 
-    @staticmethod
+    @classmethod
     def _apply_semantic_object(
+        cls,
         facts: dict,
         event: DecisionEvent,
     ) -> None:
-
-        metadata = dict(event.metadata or {})
+        metadata = dict(
+            event.metadata or {}
+        )
 
         domain = str(
             metadata.get("domain")
@@ -43,206 +81,216 @@ class RuntimeStateReducer:
             or "unknown"
         )
 
+        actor = str(
+            metadata.get("actor")
+            or "unknown"
+        )
+
+        canonical_field = (
+            cls._canonical_field(
+                event.field
+            )
+        )
 
         item = {
-
             "domain": domain,
-
             "kind": kind,
 
-            "field":
-                event.field,
+            # semanticState / decisionState 使用 canonical field。
+            "field": canonical_field,
 
-            "value":
-                event.value,
+            "value": event.value,
 
-            "relation":
+            "relation": (
                 metadata.get("relation")
-                or "",
+                or ""
+            ),
 
-            "role":
+            "role": (
                 metadata.get("role")
-                or "unknown",
+                or "unknown"
+            ),
 
-            "actor":
-                metadata.get("actor")
-                or "unknown",
+            "actor": actor,
 
-            "target":
+            "target": (
                 metadata.get("target")
-                or "",
+                or ""
+            ),
 
-            "status":
+            "status": (
                 metadata.get("status")
-                or "",
+                or ""
+            ),
 
-            "confidence":
-                metadata.get("confidence"),
+            "confidence": (
+                metadata.get("confidence")
+            ),
 
-            "sourceText":
-                event.sourceText,
+            "sourceText": event.sourceText,
 
-            "eventId":
-                event.eventId,
+            "eventId": event.eventId,
         }
-
-
 
         #
         # 1. semanticHistory
         #
-        # append-only audit memory
+        # append-only audit memory.
         #
-        history=list(
+        # History keeps every semantic change over time,
+        # but uses canonical fields so downstream analysis
+        # does not need to understand aliases.
+        #
+        history = list(
             facts.get(
                 "semanticHistory"
             )
             or []
         )
 
-
         if not any(
             old.get("eventId")
-            ==
-            event.eventId
-
+            == event.eventId
             for old in history
         ):
+            history.append(
+                item
+            )
 
-            history.append(item)
-
-
-
-        facts["semanticHistory"] = history[-100:]
-
-
-
+        facts[
+            "semanticHistory"
+        ] = history[-100:]
 
         #
         # 2. semanticState
         #
-        # current semantic truth
+        # semanticState represents CURRENT PARTICIPANT POSITIONS.
         #
-        semantic_state=dict(
+        # Slot identity:
+        #
+        #     domain + canonicalField + actor
+        #
+        # Therefore:
+        #
+        # us / discountPercent / 8
+        #     ->
+        # us / discountPercent / 15
+        #
+        # replaces the old US position.
+        #
+        # But:
+        #
+        # us / discountPercent / 15
+        #
+        # and
+        #
+        # customer / discountPercent / 10
+        #
+        # coexist because they represent different parties.
+        #
+        semantic_state = dict(
             facts.get(
                 "semanticState"
             )
             or {}
         )
 
-
-        domain_items=list(
+        domain_items = list(
             semantic_state.get(domain)
             or []
         )
 
-
-
-        #
-        # semantic slot
-        #
-        # same business meaning should replace
-        #
-        # Example:
-        #
-        # discountPercent 8%
-        # discountPercent 15%
-        #
-        # only keep 15%
-        #
         slot = (
-
             domain,
-
-            event.field
-            or "",
-
-            metadata.get("target")
-            or "",
-
+            canonical_field,
+            actor,
         )
 
-
-
         def same_slot(
-            current:dict
-        ):
-
+            current: dict,
+        ) -> bool:
             return (
-
-                current.get("domain")
-                ==
-                slot[0]
-
-                and
-
-                (
+                str(
+                    current.get("domain")
+                    or ""
+                )
+                == slot[0]
+                and cls._canonical_field(
                     current.get("field")
-                    or ""
                 )
-                ==
-                slot[1]
-
-
-                and
-
-                (
-                    current.get("target")
-                    or ""
+                == slot[1]
+                and str(
+                    current.get("actor")
+                    or "unknown"
                 )
-                ==
-                slot[2]
-
+                == slot[2]
             )
 
+        #
+        # rejected / withdrawn semantics
+        #
+        # Do NOT delete another participant's position.
+        #
+        # If the event explicitly describes the same participant's
+        # slot as rejected/withdrawn, keep the item itself in
+        # semanticState because it is still useful as the participant's
+        # latest state.
+        #
+        # DecisionStateResolver will decide whether such a state is
+        # effective for the current decision surface.
+        #
+        replaced = False
 
-
-
-        replaced=False
-
-
-        for index,current in enumerate(
-            domain_items
-        ):
-
-
-            if same_slot(current):
-
-                domain_items[index]=item
-
-                replaced=True
-
-                break
-
-
-
+        if canonical_field or actor:
+            for index, current in enumerate(
+                domain_items
+            ):
+                if same_slot(current):
+                    domain_items[index] = item
+                    replaced = True
+                    break
 
         if not replaced:
-
-
-            domain_items.append(
-                item
+            duplicate = any(
+                current.get("eventId")
+                == item["eventId"]
+                for current in domain_items
             )
 
+            if not duplicate:
+                domain_items.append(
+                    item
+                )
 
+        if domain_items:
+            semantic_state[
+                domain
+            ] = domain_items[-20:]
+        else:
+            semantic_state.pop(
+                domain,
+                None,
+            )
 
-        #
-        # keep only current semantic state
-        #
-        semantic_state[domain]=domain_items[-20:]
-
-
-
-        facts["semanticState"]=semantic_state
+        facts[
+            "semanticState"
+        ] = semantic_state
 
     @staticmethod
     def _flatten_decision_state(
         decision_state: dict[str, Any] | None,
     ) -> dict[str, Any]:
-        state = decision_state or {}
+        state = (
+            decision_state
+            or {}
+        )
+
         output: dict[str, Any] = {}
 
-        commercial = state.get("commercial") or {}
+        commercial = (
+            state.get("commercial")
+            or {}
+        )
 
         if "discountPercent" in commercial:
             output[
@@ -258,7 +306,10 @@ class RuntimeStateReducer:
                 "paymentTermDays"
             )
 
-        delivery = state.get("delivery") or {}
+        delivery = (
+            state.get("delivery")
+            or {}
+        )
 
         if "goLiveDate" in delivery:
             output[
@@ -267,18 +318,30 @@ class RuntimeStateReducer:
                 "goLiveDate"
             )
 
-        scope = state.get("scope") or {}
+        scope = (
+            state.get("scope")
+            or {}
+        )
 
         if scope:
             output[
                 "scope.current"
             ] = {
-                "value": scope.get("value"),
-                "relation": scope.get("relation"),
-                "status": scope.get("status"),
+                "value": (
+                    scope.get("value")
+                ),
+                "relation": (
+                    scope.get("relation")
+                ),
+                "status": (
+                    scope.get("status")
+                ),
             }
 
-        resource = state.get("resource") or {}
+        resource = (
+            state.get("resource")
+            or {}
+        )
 
         if "maxTeamSize" in resource:
             output[
@@ -287,14 +350,20 @@ class RuntimeStateReducer:
                 "maxTeamSize"
             )
 
-        approval = state.get("approval") or {}
+        approval = (
+            state.get("approval")
+            or {}
+        )
 
         for key, value in approval.items():
             output[
                 f"approval.{key}"
             ] = value
 
-        contract = state.get("contract") or {}
+        contract = (
+            state.get("contract")
+            or {}
+        )
 
         for key, value in contract.items():
             output[
@@ -309,31 +378,49 @@ class RuntimeStateReducer:
         previous_state: dict[str, Any] | None,
         current_state: dict[str, Any] | None,
     ) -> list[dict]:
-        previous = cls._flatten_decision_state(
-            previous_state
+        previous = (
+            cls._flatten_decision_state(
+                previous_state
+            )
         )
 
-        current = cls._flatten_decision_state(
-            current_state
+        current = (
+            cls._flatten_decision_state(
+                current_state
+            )
         )
 
         revisions: list[dict] = []
 
-        keys = set(previous) | set(current)
+        keys = (
+            set(previous)
+            | set(current)
+        )
 
         for field in sorted(keys):
-            old_value = previous.get(field)
-            new_value = current.get(field)
+            old_value = (
+                previous.get(field)
+            )
+
+            new_value = (
+                current.get(field)
+            )
 
             if old_value == new_value:
                 continue
 
             revisions.append(
                 {
-                    "type": "SemanticRevision",
+                    "type": (
+                        "SemanticRevision"
+                    ),
                     "field": field,
-                    "previousValue": old_value,
-                    "currentValue": new_value,
+                    "previousValue": (
+                        old_value
+                    ),
+                    "currentValue": (
+                        new_value
+                    ),
                 }
             )
 
@@ -344,7 +431,9 @@ class RuntimeStateReducer:
         state: RuntimeState,
         events: list[DecisionEvent],
     ) -> RuntimeState:
-        facts = dict(state.decisionFacts)
+        facts = dict(
+            state.decisionFacts
+        )
 
         resolved = list(
             state.resolvedRiskKeys
@@ -355,12 +444,14 @@ class RuntimeStateReducer:
         )
 
         previous_decision_state = dict(
-            state.decisionState or {}
+            state.decisionState
+            or {}
         )
 
         for event in events:
             if (
-                event.type == "PriceChanged"
+                event.type
+                == "PriceChanged"
                 and event.value is not None
             ):
                 new_value = float(
@@ -368,8 +459,11 @@ class RuntimeStateReducer:
                 )
 
                 previous_value = (
-                    float(event.previousValue)
-                    if event.previousValue is not None
+                    float(
+                        event.previousValue
+                    )
+                    if event.previousValue
+                    is not None
                     else facts.get(
                         "discountPercent"
                     )
@@ -418,8 +512,11 @@ class RuntimeStateReducer:
                 )
 
                 previous_value = (
-                    int(event.previousValue)
-                    if event.previousValue is not None
+                    int(
+                        event.previousValue
+                    )
+                    if event.previousValue
+                    is not None
                     else facts.get(
                         "paymentTermDays"
                     )
@@ -460,7 +557,10 @@ class RuntimeStateReducer:
                         payment_risk_key
                     )
 
-            elif event.type == "ConstraintAdded":
+            elif (
+                event.type
+                == "ConstraintAdded"
+            ):
                 constraints = list(
                     facts.get(
                         "runtimeConstraints"
@@ -486,7 +586,10 @@ class RuntimeStateReducer:
                     "runtimeConstraints"
                 ] = constraints[-10:]
 
-            elif event.type == "ConditionAccepted":
+            elif (
+                event.type
+                == "ConditionAccepted"
+            ):
                 facts[
                     "lastAcceptedCondition"
                 ] = str(
@@ -494,7 +597,10 @@ class RuntimeStateReducer:
                     or event.sourceText
                 )
 
-            elif event.type == "ConditionRejected":
+            elif (
+                event.type
+                == "ConditionRejected"
+            ):
                 facts[
                     "lastRejectedCondition"
                 ] = str(
@@ -502,24 +608,41 @@ class RuntimeStateReducer:
                     or event.sourceText
                 )
 
-            elif event.type == "SemanticObjectRecorded":
+            elif (
+                event.type
+                == "SemanticObjectRecorded"
+            ):
                 self._apply_semantic_object(
                     facts,
                     event,
                 )
 
-            elif event.type == "RiskResolved":
+            elif (
+                event.type
+                == "RiskResolved"
+            ):
                 key = None
 
-                if event.field == "paymentTermDays":
-                    key = "payment_term"
+                if (
+                    event.field
+                    == "paymentTermDays"
+                ):
+                    key = (
+                        "payment_term"
+                    )
 
-                elif event.field == "discountPercent":
-                    key = "discount"
+                elif (
+                    event.field
+                    == "discountPercent"
+                ):
+                    key = (
+                        "discount"
+                    )
 
                 if (
                     key
-                    and key not in resolved
+                    and key
+                    not in resolved
                 ):
                     resolved.append(
                         key
