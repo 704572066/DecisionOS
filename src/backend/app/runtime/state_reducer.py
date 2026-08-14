@@ -30,111 +30,210 @@ class RuntimeStateReducer:
         facts: dict,
         event: DecisionEvent,
     ) -> None:
+
         metadata = dict(event.metadata or {})
-        domain = str(metadata.get("domain") or "other")
-        kind = str(metadata.get("kind") or "unknown")
+
+        domain = str(
+            metadata.get("domain")
+            or "other"
+        )
+
+        kind = str(
+            metadata.get("kind")
+            or "unknown"
+        )
+
 
         item = {
+
             "domain": domain,
+
             "kind": kind,
-            "field": event.field,
-            "value": event.value,
-            "relation": metadata.get("relation") or "",
-            "role": metadata.get("role") or "unknown",
-            "actor": metadata.get("actor") or "unknown",
-            "target": metadata.get("target") or "",
-            "status": metadata.get("status") or "",
-            "confidence": metadata.get("confidence"),
-            "sourceText": event.sourceText,
-            "eventId": event.eventId,
+
+            "field":
+                event.field,
+
+            "value":
+                event.value,
+
+            "relation":
+                metadata.get("relation")
+                or "",
+
+            "role":
+                metadata.get("role")
+                or "unknown",
+
+            "actor":
+                metadata.get("actor")
+                or "unknown",
+
+            "target":
+                metadata.get("target")
+                or "",
+
+            "status":
+                metadata.get("status")
+                or "",
+
+            "confidence":
+                metadata.get("confidence"),
+
+            "sourceText":
+                event.sourceText,
+
+            "eventId":
+                event.eventId,
         }
 
-        history = list(facts.get("semanticHistory") or [])
+
+
+        #
+        # 1. semanticHistory
+        #
+        # append-only audit memory
+        #
+        history=list(
+            facts.get(
+                "semanticHistory"
+            )
+            or []
+        )
+
 
         if not any(
-            current.get("eventId") == event.eventId
-            for current in history
+            old.get("eventId")
+            ==
+            event.eventId
+
+            for old in history
         ):
+
             history.append(item)
+
+
 
         facts["semanticHistory"] = history[-100:]
 
-        semantic_state = dict(
-            facts.get("semanticState") or {}
+
+
+
+        #
+        # 2. semanticState
+        #
+        # current semantic truth
+        #
+        semantic_state=dict(
+            facts.get(
+                "semanticState"
+            )
+            or {}
         )
 
-        domain_items = list(
-            semantic_state.get(domain) or []
+
+        domain_items=list(
+            semantic_state.get(domain)
+            or []
         )
 
+
+
+        #
+        # semantic slot
+        #
+        # same business meaning should replace
+        #
+        # Example:
+        #
+        # discountPercent 8%
+        # discountPercent 15%
+        #
+        # only keep 15%
+        #
         slot = (
-            kind,
-            event.field or "",
-            item["target"],
-            item["actor"],
-            item["role"],
+
+            domain,
+
+            event.field
+            or "",
+
+            metadata.get("target")
+            or "",
+
         )
 
-        def same_slot(current: dict) -> bool:
+
+
+        def same_slot(
+            current:dict
+        ):
+
             return (
-                current.get("kind") == slot[0]
-                and (current.get("field") or "") == slot[1]
-                and (current.get("target") or "") == slot[2]
-                and (current.get("actor") or "unknown") == slot[3]
-                and (current.get("role") or "unknown") == slot[4]
-            )
 
-        if item["status"] in {
-            "withdrawn",
-            "rejected",
-        }:
-            domain_items = [
-                current
-                for current in domain_items
-                if not same_slot(current)
-            ]
+                current.get("domain")
+                ==
+                slot[0]
 
-        else:
-            replaced = False
+                and
 
-            if event.field or item["target"]:
-                for index, current in enumerate(
-                    domain_items
-                ):
-                    if same_slot(current):
-                        domain_items[index] = item
-                        replaced = True
-                        break
-
-            if not replaced:
-                duplicate = any(
-                    current.get("kind") == item["kind"]
-                    and current.get("field") == item["field"]
-                    and current.get("value") == item["value"]
-                    and current.get("relation") == item["relation"]
-                    and current.get("actor") == item["actor"]
-                    and current.get("target") == item["target"]
-                    and (
-                        current.get("role")
-                        or "unknown"
-                    ) == item["role"]
-                    for current in domain_items
+                (
+                    current.get("field")
+                    or ""
                 )
+                ==
+                slot[1]
 
-                if not duplicate:
-                    domain_items.append(item)
 
-        if domain_items:
-            semantic_state[domain] = (
-                domain_items[-20:]
+                and
+
+                (
+                    current.get("target")
+                    or ""
+                )
+                ==
+                slot[2]
+
             )
-        else:
-            semantic_state.pop(
-                domain,
-                None,
+
+
+
+
+        replaced=False
+
+
+        for index,current in enumerate(
+            domain_items
+        ):
+
+
+            if same_slot(current):
+
+                domain_items[index]=item
+
+                replaced=True
+
+                break
+
+
+
+
+        if not replaced:
+
+
+            domain_items.append(
+                item
             )
 
-        facts["semanticState"] = semantic_state
+
+
+        #
+        # keep only current semantic state
+        #
+        semantic_state[domain]=domain_items[-20:]
+
+
+
+        facts["semanticState"]=semantic_state
 
     @staticmethod
     def _flatten_decision_state(
