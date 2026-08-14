@@ -16,7 +16,41 @@ class SemanticEventValidator:
     DEFAULT_CONFIDENCE = 0.72
     MAX_EVENTS = 8
 
+    @staticmethod
+    def _normalize_numeric_value(
+        event: SemanticEventCandidate,
+    ) -> None:
+        if event.domain != "commercial":
+            return
 
+        if event.field not in {
+            "discountPercent",
+            "priceReduction",
+            "paymentTermDays",
+            "paymentTerms",
+        }:
+            return
+
+        value = event.normalizedValue
+
+        if isinstance(value, str):
+            text = value.strip()
+
+            if text.endswith("%"):
+                text = text[:-1].strip()
+
+            try:
+                number = float(text)
+            except ValueError:
+                return
+
+            if event.field in {
+                "paymentTermDays",
+                "paymentTerms",
+            }:
+                event.normalizedValue = int(number)
+            else:
+                event.normalizedValue = number
 
     def validate(
         self,
@@ -84,6 +118,7 @@ class SemanticEventValidator:
                 )
             )
 
+            self._normalize_numeric_value(candidate)
 
             if not self._valid(candidate):
                 continue
@@ -114,9 +149,9 @@ class SemanticEventValidator:
 
 
     @staticmethod
-    def _valid(event):
-
-
+    def _valid(
+        event: SemanticEventCandidate,
+    ) -> bool:
         if event.actor not in {
             "customer",
             "us",
@@ -125,24 +160,29 @@ class SemanticEventValidator:
         }:
             return False
 
-
-
-        if event.domain=="commercial":
-
+        if event.domain == "commercial":
+            value = event.normalizedValue
 
             if event.field in {
                 "discountPercent",
                 "priceReduction",
             }:
-
-                value=event.normalizedValue
-
-                if not isinstance(
-                    value,
-                    (int,float)
-                ):
+                if not isinstance(value, (int, float)):
                     return False
 
+                if event.field == "discountPercent":
+                    return 0 <= float(value) <= 100
+
+                return 0 <= float(value) <= 100
+
+            if event.field in {
+                "paymentTermDays",
+                "paymentTerms",
+            }:
+                if not isinstance(value, (int, float)):
+                    return False
+
+                return 0 <= int(value) <= 3650
 
         return True
 
