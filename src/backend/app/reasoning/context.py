@@ -1,26 +1,48 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
 
+ConstraintOperator = Literal[
+    "=",
+    "!=",
+    ">",
+    ">=",
+    "<",
+    "<=",
+
+    "in",
+    "not_in",
+
+    "exists",
+    "missing",
+
+    "requires",
+    "depends_on",
+
+    "conflicts_with",
+]
+
+
+ConstraintEffect = Literal[
+    "risk",
+    "conflict",
+    "gap",
+    "dependency",
+    "deviation",
+]
+
+
+ConstraintSubjectSource = Literal[
+    "semantic_state",
+    "decision_state",
+    "either",
+]
+
+
 class EvaluationSubject(BaseModel):
-    """
-    A normalized subject currently visible to the Reasoner.
-
-    It may come from semanticState or decisionState.
-
-    Examples:
-    - discountPercent
-    - paymentTermDays
-    - goLiveDate
-    - legalApproval
-    - scopeInclusion
-
-    The model is intentionally domain-neutral.
-    """
-
     domain: str = ""
 
     field: str
@@ -53,21 +75,6 @@ class EvaluationSubject(BaseModel):
 
 
 class EvaluationKnowledge(BaseModel):
-    """
-    Knowledge/evidence available to the evaluator.
-
-    This is deliberately generic and does not assume that the object
-    is already a machine-executable policy.
-
-    sourceType may be:
-    - policy
-    - decision
-    - crm
-    - document
-    - knowledge
-    - other
-    """
-
     id: str
 
     sourceType: str = "knowledge"
@@ -89,68 +96,150 @@ class EvaluationKnowledge(BaseModel):
     )
 
 
-class EvaluationConstraint(BaseModel):
+class ConstraintOperand(BaseModel):
     """
-    Machine-evaluable constraint.
+    Machine-readable reference to another subject.
 
-    The Generic Evaluator only understands this structure.
+    Used for relational constraints such as:
 
-    It does NOT know what discount, payment term, delivery date,
-    or legal approval mean as business concepts.
+        discountPercent > 10
+            requires
+        paymentTermEvaluation exists
 
-    Examples:
+    or:
 
-    subject = "discountPercent"
-    operator = ">"
-    expectedValue = 10
+        goLiveDate
+            conflicts_with
+        resourceCapacity
 
-    subject = "legalApproval"
-    operator = "requires"
-    expectedValue = True
+    This object references structure, not business meaning.
     """
-
-    id: str
 
     domain: str = ""
 
     subject: str
 
-    operator: str
+    operator: ConstraintOperator = "exists"
 
     expectedValue: Any = None
 
-    severity: str = "medium"
+    source: ConstraintSubjectSource = "either"
 
-    findingType: str = "risk"
-
-    title: str = ""
-
-    description: str = ""
-
-    sourceIds: list[str] = Field(
-        default_factory=list
-    )
+    actor: str = ""
 
     attributes: dict[str, Any] = Field(
         default_factory=dict
     )
 
 
+class EvaluationConstraint(BaseModel):
+    """
+    Machine-executable enterprise constraint.
+
+    This model is the boundary between:
+
+        natural-language enterprise knowledge
+                    ↓
+            Constraint Compiler
+                    ↓
+        EvaluationConstraint
+                    ↓
+             Generic Evaluator
+
+    The evaluator must never need to understand the natural-language
+    policy that produced this object.
+    """
+
+    id: str
+
+    #
+    # Where this constraint conceptually belongs.
+    #
+    domain: str = ""
+
+    #
+    # Primary subject being evaluated.
+    #
+    subject: str
+
+    #
+    # Which state surface should supply the actual value.
+    #
+    subjectSource: ConstraintSubjectSource = "either"
+
+    #
+    # Optional participant ownership filter.
+    #
+    # Example:
+    # customer / us / third_party
+    #
+    actor: str = ""
+
+    #
+    # Primary comparison / relation.
+    #
+    operator: ConstraintOperator
+
+    expectedValue: Any = None
+
+    #
+    # Optional second operand.
+    #
+    # Used for:
+    #
+    # requires
+    # depends_on
+    # conflicts_with
+    #
+    operand: ConstraintOperand | None = None
+
+    #
+    # What kind of Finding should be produced when the constraint
+    # condition is satisfied / violated according to evaluationMode.
+    #
+    findingType: ConstraintEffect = "risk"
+
+    severity: Literal[
+        "low",
+        "medium",
+        "high",
+        "critical",
+    ] = "medium"
+
+    #
+    # Determines when a Finding should be emitted.
+    #
+    # "on_match":
+    #     emit when actual matches the condition
+    #
+    # "on_mismatch":
+    #     emit when actual violates the condition
+    #
+    evaluationMode: Literal[
+        "on_match",
+        "on_mismatch",
+    ] = "on_mismatch"
+
+    title: str = ""
+
+    description: str = ""
+
+    #
+    # Original enterprise evidence.
+    #
+    sourceIds: list[str] = Field(
+        default_factory=list
+    )
+
+    #
+    # Generic metadata for compiler/evaluator extensions.
+    #
+    attributes: dict[str, Any] = Field(
+        default_factory=dict
+    )
+
+
 class EvaluationContext(BaseModel):
-    """
-    Complete input for one reasoning cycle.
-
-    Future flow:
-
-        RuntimeState
-            ↓
-        EvaluationContextBuilder
-            ↓
-        Generic Evaluator
-            ↓
-        FindingSet
-    """
-
     meetingId: str
 
     contextId: str = ""
@@ -159,33 +248,18 @@ class EvaluationContext(BaseModel):
 
     objective: str = ""
 
-    #
-    # Current participant positions.
-    #
     semanticSubjects: list[EvaluationSubject] = Field(
         default_factory=list
     )
 
-    #
-    # Current effective decision surface.
-    #
     decisionSubjects: list[EvaluationSubject] = Field(
         default_factory=list
     )
 
-    #
-    # Retrieved enterprise/history evidence.
-    #
     knowledge: list[EvaluationKnowledge] = Field(
         default_factory=list
     )
 
-    #
-    # Only already-structured constraints belong here.
-    #
-    # 3-4.2-A does not attempt to convert natural-language policy
-    # documents into constraints yet.
-    #
     constraints: list[EvaluationConstraint] = Field(
         default_factory=list
     )

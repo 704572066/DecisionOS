@@ -1,4 +1,8 @@
 from app.reasoning.context import (
+    ConstraintEffect,
+    ConstraintOperand,
+    ConstraintOperator,
+    ConstraintSubjectSource,
     EvaluationConstraint,
     EvaluationContext,
     EvaluationKnowledge,
@@ -18,6 +22,10 @@ from app.reasoning.models import (
 )
 
 __all__ = [
+    "ConstraintEffect",
+    "ConstraintOperand",
+    "ConstraintOperator",
+    "ConstraintSubjectSource",
     "EvaluationConstraint",
     "EvaluationContext",
     "EvaluationContextBuilder",
