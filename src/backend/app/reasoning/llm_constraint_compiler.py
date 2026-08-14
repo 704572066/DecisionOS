@@ -83,6 +83,35 @@ stable camelCase semantic field name that accurately represents the
 concept expressed by the knowledge.
 
 ======================================================================
+POLICY SCOPE VS RUNTIME CONTEXT
+======================================================================
+
+Runtime semanticSubjects and decisionSubjects are vocabulary/context only.
+
+Never infer policy scope from the actor, role, status, or current value of
+a runtime subject unless the enterprise knowledge explicitly states that
+scope.
+
+Example:
+
+Knowledge:
+"When X exceeds Y, Z must be evaluated."
+
+Runtime context happens to contain:
+actor=customer for X.
+
+Do NOT conclude that the policy applies only to customer-owned X.
+
+If the policy does not explicitly restrict a participant:
+actor = ""
+
+Likewise, do not choose semantic_state merely because the matching vocabulary
+currently appears there.
+
+Use subjectSource="either" when the policy itself does not explicitly limit
+the rule to participant positions or final decision state.
+
+======================================================================
 CONSTRAINT STRUCTURE
 ======================================================================
 
@@ -131,6 +160,7 @@ Comparison operators compare the runtime value with expectedValue.
 exists / missing operate on existence and therefore expectedValue
 must be null.
 
+
 ======================================================================
 EVALUATION MODE
 ======================================================================
@@ -166,6 +196,27 @@ OPERAND
 Use operand when the rule relates the primary condition to another
 required/conflicting/dependent condition.
 
+The operand must preserve the exact semantic requirement of the policy.
+
+Do not weaken or substitute the required concept.
+
+For example, if knowledge says:
+
+"X requires Y to be evaluated"
+
+then an operand meaning merely:
+
+"Y exists"
+
+is NOT equivalent.
+
+Represent the evaluation/assessment itself as the operand subject, using a
+stable semantic field name if necessary.
+
+The runtime vocabulary is preferred when semantically equivalent, but you
+may create a new stable camelCase field when the policy expresses a concept
+that is not yet present in runtime state.
+
 Operand structure:
 
 {
@@ -181,6 +232,41 @@ Operand structure:
 Do not put natural-language explanation into operand.subject.
 
 Use a semantic field name.
+
+======================================================================
+FINDING TYPE
+======================================================================
+
+Choose findingType according to the semantic relationship expressed by
+the enterprise knowledge.
+
+Use findingType="dependency" when the policy says that one condition
+triggers or requires another prerequisite, review, approval, assessment,
+evaluation, or action.
+
+Examples:
+- "折扣超过10%必须评估付款周期"
+  -> findingType="dependency"
+
+- "合同签署前必须经过法务审批"
+  -> findingType="dependency"
+
+- "高风险项目必须完成安全评审"
+  -> findingType="dependency"
+
+Use findingType="gap" when the policy primarily states that required
+information or a required state is absent, without a triggering dependency.
+
+Examples:
+- "项目必须有明确预算"
+  -> findingType="gap"
+
+- "合同必须包含付款周期"
+  -> findingType="gap"
+
+Do not use "gap" merely because the required operand is currently missing.
+findingType describes the semantic relationship expressed by the policy,
+not the current runtime evaluation result.
 
 ======================================================================
 PERCENTAGES AND UNITS
