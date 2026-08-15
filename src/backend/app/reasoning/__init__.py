@@ -67,6 +67,11 @@ from app.reasoning.service import (
     ReasoningService,
     reasoning_service,
 )
+from app.reasoning.knowledge_governance import (
+    KnowledgeCompilationGovernance,
+    KnowledgeEligibility,
+    knowledge_compilation_governance,
+)
 from .finding_repository import FindingRepository
 from .finding_lifecycle import FindingLifecycleManager
 __all__ = [
@@ -112,4 +117,7 @@ __all__ = [
     "ReasoningResult",
     "ReasoningService",
     "reasoning_service",
+    "KnowledgeCompilationGovernance",
+    "KnowledgeEligibility",
+    "knowledge_compilation_governance",
 ]
