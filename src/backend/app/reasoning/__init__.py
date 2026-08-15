@@ -84,6 +84,15 @@ from app.reasoning.recommendation_generator import (
     RecommendationGenerator,
     recommendation_generator,
 )
+from app.reasoning.recommendation_repository import (
+    RecommendationRepository,
+    recommendation_repository,
+)
+
+from app.reasoning.recommendation_lifecycle import (
+    RecommendationLifecycleManager,
+    recommendation_lifecycle_manager,
+)
 from .finding_repository import FindingRepository
 from .finding_lifecycle import FindingLifecycleManager
 __all__ = [
@@ -140,4 +149,8 @@ __all__ = [
     "RecommendationGenerationDiagnostics",
     "RecommendationGenerator",
     "recommendation_generator",
+    "RecommendationRepository",
+    "recommendation_repository",
+    "RecommendationLifecycleManager",
+    "recommendation_lifecycle_manager",
 ]
