@@ -15,9 +15,10 @@ class FindingLifecycleManager:
 
 
     def evaluate(
-        self,
-        finding: Optional[Finding],
-        triggered: bool,
+    self,
+    meeting_id: str,
+    finding: Optional[Finding],
+    triggered: bool,
     ) -> Optional[Finding]:
 
         if finding is None:
@@ -25,7 +26,8 @@ class FindingLifecycleManager:
 
 
         existing = self.repository.find_by_fingerprint(
-            finding.fingerprint
+            meeting_id,
+            finding.fingerprint,
         )
 
 
@@ -40,7 +42,7 @@ class FindingLifecycleManager:
                 finding.firstObservedAt = now
                 finding.updatedAt = now
 
-                self.repository.save(finding)
+                self.repository.save(meeting_id, finding)
 
                 return finding
 
@@ -64,7 +66,7 @@ class FindingLifecycleManager:
 
             existing.updatedAt = now
 
-            self.repository.update(existing)
+            self.repository.update(meeting_id, existing)
 
             return existing
 
@@ -76,7 +78,7 @@ class FindingLifecycleManager:
             existing.resolvedAt = now
             existing.updatedAt = now
 
-            self.repository.update(existing)
+            self.repository.update(meeting_id, existing)
 
             return existing
 
