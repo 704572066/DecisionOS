@@ -13,6 +13,10 @@ from app.reasoning.constraint_validator import (
     ConstraintValidator,
     constraint_validator,
 )
+from app.reasoning.knowledge_governance import (
+    KnowledgeCompilationGovernance,
+    knowledge_compilation_governance,
+)
 
 
 @dataclass
@@ -34,17 +38,8 @@ class ConstraintCompilerBackend(ABC):
     """
     Pluggable semantic compilation backend.
 
-    The backend converts enterprise knowledge into the generic
-    EvaluationConstraint DSL.
-
-    Implementations may use:
-    - LLM
-    - rule service
-    - external policy engine
-    - precompiled constraints
-
-    Business semantics belong to the backend input/interpretation,
-    not to ConstraintCompiler itself.
+    The backend converts eligible enterprise knowledge into the
+    generic EvaluationConstraint DSL.
     """
 
     @abstractmethod
@@ -63,7 +58,7 @@ class NullConstraintCompilerBackend(
     """
     Safe default backend.
 
-    It deliberately performs no semantic inference.
+    Performs no semantic inference.
     """
 
     async def compile_knowledge(
@@ -81,9 +76,13 @@ class ConstraintCompiler:
 
     Pipeline:
 
-        EvaluationKnowledge
+        EvaluationKnowledge[]
                 ↓
-        semantic compiler backend
+        KnowledgeCompilationGovernance
+                ↓
+        eligible knowledge only
+                ↓
+        ConstraintCompilerBackend
                 ↓
         EvaluationConstraint[]
                 ↓
@@ -91,13 +90,16 @@ class ConstraintCompiler:
                 ↓
         valid constraints
 
-    This layer contains no enterprise-specific interpretation.
+    Non-normative knowledge remains available in EvaluationContext
+    for evidence / precedent / recommendation, but is not compiled
+    into executable constraints.
     """
 
     def __init__(
         self,
         backend: ConstraintCompilerBackend | None = None,
         validator: ConstraintValidator | None = None,
+        governance: KnowledgeCompilationGovernance | None = None,
     ) -> None:
         self.backend = (
             backend
@@ -111,6 +113,12 @@ class ConstraintCompiler:
             else constraint_validator
         )
 
+        self.governance = (
+            governance
+            if governance is not None
+            else knowledge_compilation_governance
+        )
+
     async def compile(
         self,
         context: EvaluationContext,
@@ -119,9 +127,25 @@ class ConstraintCompiler:
 
         backend_errors: list[dict[str, Any]] = []
 
+        #
+        # ------------------------------------------------------------
+        # 1. Knowledge governance
+        # ------------------------------------------------------------
+        #
+        eligible_knowledge, skipped_knowledge = (
+            self.governance.partition(
+                context.knowledge
+            )
+        )
+
         attempted = 0
 
-        for knowledge in context.knowledge:
+        #
+        # ------------------------------------------------------------
+        # 2. Compile eligible knowledge only
+        # ------------------------------------------------------------
+        #
+        for knowledge in eligible_knowledge:
             attempted += 1
 
             try:
@@ -132,7 +156,9 @@ class ConstraintCompiler:
                     )
                 )
 
-                compiled.extend(constraints)
+                compiled.extend(
+                    constraints
+                )
 
             except Exception as exc:
                 backend_errors.append(
@@ -142,29 +168,100 @@ class ConstraintCompiler:
                     }
                 )
 
+        #
+        # ------------------------------------------------------------
+        # 3. Structural validation
+        # ------------------------------------------------------------
+        #
         valid_constraints, rejected = (
-            self.validator.validate_many(compiled)
+            self.validator.validate_many(
+                compiled
+            )
         )
+
+        #
+        # ------------------------------------------------------------
+        # 4. Diagnostics
+        # ------------------------------------------------------------
+        #
+        skipped_payload = [
+            {
+                "knowledgeId": item.knowledgeId,
+                "reason": item.reason,
+                "metadata": dict(
+                    item.metadata
+                    or {}
+                ),
+            }
+            for item in skipped_knowledge
+        ]
 
         return ConstraintCompilationResult(
             constraints=valid_constraints,
+
             rejected=rejected,
+
             diagnostics={
-                "knowledgeCount": len(context.knowledge),
+                #
+                # Input
+                #
+                "knowledgeCount": len(
+                    context.knowledge
+                ),
+
+                #
+                # Governance
+                #
+                "eligibleKnowledgeCount": len(
+                    eligible_knowledge
+                ),
+
+                "skippedKnowledgeCount": len(
+                    skipped_knowledge
+                ),
+
+                "skippedKnowledge": (
+                    skipped_payload
+                ),
+
+                #
+                # Compilation
+                #
                 "attemptedKnowledgeCount": attempted,
-                "compiledConstraintCount": len(compiled),
+
+                "compiledConstraintCount": len(
+                    compiled
+                ),
+
+                #
+                # Validation
+                #
                 "validConstraintCount": len(
                     valid_constraints
                 ),
+
                 "rejectedConstraintCount": len(
                     rejected
                 ),
+
+                #
+                # Backend
+                #
                 "backendErrorCount": len(
                     backend_errors
                 ),
+
                 "backendErrors": backend_errors,
+
                 "backend": type(
                     self.backend
+                ).__name__,
+
+                #
+                # Governance implementation
+                #
+                "governance": type(
+                    self.governance
                 ).__name__,
             },
         )
