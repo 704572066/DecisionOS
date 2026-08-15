@@ -269,3 +269,34 @@ class FindingSet(BaseModel):
     diagnostics: dict[str, Any] = Field(
         default_factory=dict
     )
+
+
+class ReasoningDiagnostics(BaseModel):
+    evaluationContextBuilt: bool = False
+
+    knowledgeCount: int = 0
+
+    compiledConstraintCount: int = 0
+    rejectedConstraintCount: int = 0
+
+    triggeredFindingCount: int = 0
+    activeFindingCount: int = 0
+    resolvedFindingCount: int = 0
+
+    compilationErrors: list[str] = Field(default_factory=list)
+    evaluationErrors: list[str] = Field(default_factory=list)
+
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ReasoningResult(BaseModel):
+    meetingId: str
+    contextId: str = ""
+    projectId: str = ""
+
+    findings: list[Finding] = Field(default_factory=list)
+    constraints: list[EvaluationConstraint] = Field(default_factory=list)
+
+    diagnostics: ReasoningDiagnostics = Field(
+        default_factory=ReasoningDiagnostics
+    )

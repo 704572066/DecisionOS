@@ -59,6 +59,10 @@ from app.reasoning.finding_set_evaluator import (
     FindingSetEvaluator,
     finding_set_evaluator,
 )
+from .models import (
+    ReasoningDiagnostics,
+    ReasoningResult,
+)
 from .finding_repository import FindingRepository
 from .finding_lifecycle import FindingLifecycleManager
 __all__ = [
@@ -100,4 +104,6 @@ __all__ = [
     "FindingSetEvaluationDiagnostics",
     "FindingSetEvaluator",
     "finding_set_evaluator",
+    "ReasoningDiagnostics",
+    "ReasoningResult",
 ]
