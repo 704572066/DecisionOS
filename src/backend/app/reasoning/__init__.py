@@ -79,6 +79,11 @@ from app.reasoning.recommendation_models import (
     RecommendationStatus,
     RecommendationType,
 )
+from app.reasoning.recommendation_generator import (
+    RecommendationGenerationDiagnostics,
+    RecommendationGenerator,
+    recommendation_generator,
+)
 from .finding_repository import FindingRepository
 from .finding_lifecycle import FindingLifecycleManager
 __all__ = [
@@ -132,4 +137,7 @@ __all__ = [
     "RecommendationSet",
     "RecommendationStatus",
     "RecommendationType",
+    "RecommendationGenerationDiagnostics",
+    "RecommendationGenerator",
+    "recommendation_generator",
 ]
