@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-
+from app.reasoning.context import EvaluationConstraint
 #
 # Finding describes WHY the current decision situation deserves attention.
 #
