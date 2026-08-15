@@ -72,6 +72,13 @@ from app.reasoning.knowledge_governance import (
     KnowledgeEligibility,
     knowledge_compilation_governance,
 )
+from app.reasoning.recommendation_models import (
+    Recommendation,
+    RecommendationPriority,
+    RecommendationSet,
+    RecommendationStatus,
+    RecommendationType,
+)
 from .finding_repository import FindingRepository
 from .finding_lifecycle import FindingLifecycleManager
 __all__ = [
@@ -120,4 +127,9 @@ __all__ = [
     "KnowledgeCompilationGovernance",
     "KnowledgeEligibility",
     "knowledge_compilation_governance",
+    "Recommendation",
+    "RecommendationPriority",
+    "RecommendationSet",
+    "RecommendationStatus",
+    "RecommendationType",
 ]
