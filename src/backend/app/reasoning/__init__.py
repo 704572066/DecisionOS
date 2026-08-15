@@ -54,6 +54,11 @@ from app.reasoning.constraint_evaluator import (
     ConstraintEvaluator,
     constraint_evaluator,
 )
+from app.reasoning.finding_set_evaluator import (
+    FindingSetEvaluationDiagnostics,
+    FindingSetEvaluator,
+    finding_set_evaluator,
+)
 from .finding_repository import FindingRepository
 from .finding_lifecycle import FindingLifecycleManager
 __all__ = [
@@ -92,4 +97,7 @@ __all__ = [
     "ConstraintEvaluationResult",
     "ConstraintEvaluator",
     "constraint_evaluator",
+    "FindingSetEvaluationDiagnostics",
+    "FindingSetEvaluator",
+    "finding_set_evaluator",
 ]
