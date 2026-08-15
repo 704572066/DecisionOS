@@ -54,6 +54,7 @@ from app.reasoning.constraint_evaluator import (
     ConstraintEvaluator,
     constraint_evaluator,
 )
+from .finding_repository import FindingRepository
 __all__ = [
     "ConstraintEffect",
     "ConstraintOperand",
