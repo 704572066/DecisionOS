@@ -55,6 +55,7 @@ from app.reasoning.constraint_evaluator import (
     constraint_evaluator,
 )
 from .finding_repository import FindingRepository
+from .finding_lifecycle import FindingLifecycleManager
 __all__ = [
     "ConstraintEffect",
     "ConstraintOperand",
