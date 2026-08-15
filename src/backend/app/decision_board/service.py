@@ -31,6 +31,7 @@ class DecisionBoardService:
         board.reasoning = DecisionBoardReasoning(
             findings=reasoning.findings,
             constraints=reasoning.constraints,
+            recommendations=reasoning.recommendations,
             diagnostics=(
                 reasoning.diagnostics.model_dump(
                     mode="json"
@@ -67,6 +68,7 @@ class DecisionBoardService:
         board.reasoning = DecisionBoardReasoning(
             findings=reasoning.findings,
             constraints=reasoning.constraints,
+            recommendations=reasoning.recommendations,
             diagnostics=(
                 reasoning.diagnostics.model_dump(
                     mode="json"

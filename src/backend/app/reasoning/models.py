@@ -271,6 +271,9 @@ class FindingSet(BaseModel):
     )
 
 
+from app.reasoning.recommendation_models import Recommendation
+
+
 class ReasoningDiagnostics(BaseModel):
     evaluationContextBuilt: bool = False
 
@@ -282,6 +285,10 @@ class ReasoningDiagnostics(BaseModel):
     triggeredFindingCount: int = 0
     activeFindingCount: int = 0
     resolvedFindingCount: int = 0
+
+    generatedRecommendationCount: int = 0
+    activeRecommendationCount: int = 0
+    obsoleteRecommendationCount: int = 0
 
     compilationErrors: list[str] = Field(default_factory=list)
     evaluationErrors: list[str] = Field(default_factory=list)
@@ -296,6 +303,7 @@ class ReasoningResult(BaseModel):
 
     findings: list[Finding] = Field(default_factory=list)
     constraints: list[EvaluationConstraint] = Field(default_factory=list)
+    recommendations: list[Recommendation] = Field(default_factory=list)
 
     diagnostics: ReasoningDiagnostics = Field(
         default_factory=ReasoningDiagnostics

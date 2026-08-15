@@ -84,6 +84,11 @@ from app.reasoning.recommendation_generator import (
     RecommendationGenerator,
     recommendation_generator,
 )
+from app.reasoning.recommendation_set_evaluator import (
+    RecommendationSetEvaluationDiagnostics,
+    RecommendationSetEvaluator,
+    recommendation_set_evaluator,
+)
 from app.reasoning.recommendation_repository import (
     RecommendationRepository,
     recommendation_repository,
@@ -149,6 +154,9 @@ __all__ = [
     "RecommendationGenerationDiagnostics",
     "RecommendationGenerator",
     "recommendation_generator",
+    "RecommendationSetEvaluationDiagnostics",
+    "RecommendationSetEvaluator",
+    "recommendation_set_evaluator",
     "RecommendationRepository",
     "recommendation_repository",
     "RecommendationLifecycleManager",

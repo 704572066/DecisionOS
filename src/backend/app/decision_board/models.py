@@ -6,6 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 from app.reasoning.models import Finding
 from app.reasoning.context import EvaluationConstraint
+from app.reasoning.recommendation_models import Recommendation
 DecisionStatus = Literal[
     "gathering_information",
     "negotiating",
@@ -20,6 +21,10 @@ class DecisionBoardReasoning(BaseModel):
     )
 
     constraints: list[EvaluationConstraint] = Field(
+        default_factory=list
+    )
+
+    recommendations: list[Recommendation] = Field(
         default_factory=list
     )
 

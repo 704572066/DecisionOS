@@ -19,6 +19,9 @@ from app.reasoning.models import (
     ReasoningDiagnostics,
     ReasoningResult,
 )
+from app.reasoning.recommendation_set_evaluator import (
+    RecommendationSetEvaluator,
+)
 from app.runtime.models import RuntimeState
 
 
@@ -63,6 +66,7 @@ class ReasoningService:
         context_builder: EvaluationContextBuilder | None = None,
         compiler: ConstraintCompiler | None = None,
         finding_evaluator: FindingSetEvaluator | None = None,
+        recommendation_evaluator: RecommendationSetEvaluator | None = None,
     ) -> None:
         self.context_builder = (
             context_builder
@@ -89,6 +93,12 @@ class ReasoningService:
             finding_evaluator
             if finding_evaluator is not None
             else FindingSetEvaluator()
+        )
+
+        self.recommendation_evaluator = (
+            recommendation_evaluator
+            if recommendation_evaluator is not None
+            else RecommendationSetEvaluator()
         )
 
     async def reason(
@@ -126,6 +136,7 @@ class ReasoningService:
                 projectId=state.projectId,
                 findings=[],
                 constraints=[],
+                recommendations=[],
                 diagnostics=diagnostics,
             )
 
@@ -178,6 +189,7 @@ class ReasoningService:
                 projectId=context.projectId,
                 findings=[],
                 constraints=[],
+                recommendations=[],
                 diagnostics=diagnostics,
             )
 
@@ -249,12 +261,72 @@ class ReasoningService:
                 projectId=context.projectId,
                 findings=[],
                 constraints=compilation.constraints,
+                recommendations=[],
                 diagnostics=diagnostics,
             )
 
         #
         # ------------------------------------------------------------
-        # 4. Unified ReasoningResult
+        # 4. FindingSet -> RecommendationSet
+        # ------------------------------------------------------------
+        #
+        try:
+            recommendation_set = (
+                self.recommendation_evaluator.evaluate(
+                    meeting_id=context.meetingId,
+                    context_id=context.contextId,
+                    findings=finding_set.findings,
+                )
+            )
+
+            recommendation_diagnostics = dict(
+                recommendation_set.diagnostics
+                or {}
+            )
+
+            diagnostics.generatedRecommendationCount = int(
+                recommendation_diagnostics.get(
+                    "generatedCount",
+                    0,
+                )
+            )
+
+            diagnostics.activeRecommendationCount = int(
+                recommendation_diagnostics.get(
+                    "activeRecommendationCount",
+                    0,
+                )
+            )
+
+            diagnostics.obsoleteRecommendationCount = int(
+                recommendation_diagnostics.get(
+                    "obsoleteCount",
+                    0,
+                )
+            )
+
+            diagnostics.metadata[
+                "recommendationEvaluation"
+            ] = recommendation_diagnostics
+
+        except Exception as exc:
+            diagnostics.evaluationErrors.append(
+                f"recommendation_evaluator: {exc}"
+            )
+
+            return ReasoningResult(
+                meetingId=context.meetingId,
+                contextId=context.contextId,
+                projectId=context.projectId,
+                findings=finding_set.findings,
+                constraints=compilation.constraints,
+                recommendations=[],
+                diagnostics=diagnostics,
+            )
+
+        #
+        # ------------------------------------------------------------
+        # 5. Unified ReasoningResult
         # ------------------------------------------------------------
         #
         return ReasoningResult(
@@ -263,6 +335,9 @@ class ReasoningService:
             projectId=context.projectId,
             findings=finding_set.findings,
             constraints=compilation.constraints,
+            recommendations=(
+                recommendation_set.recommendations
+            ),
             diagnostics=diagnostics,
         )
 
