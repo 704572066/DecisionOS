@@ -63,6 +63,10 @@ from .models import (
     ReasoningDiagnostics,
     ReasoningResult,
 )
+from app.reasoning.service import (
+    ReasoningService,
+    reasoning_service,
+)
 from .finding_repository import FindingRepository
 from .finding_lifecycle import FindingLifecycleManager
 __all__ = [
@@ -106,4 +110,6 @@ __all__ = [
     "finding_set_evaluator",
     "ReasoningDiagnostics",
     "ReasoningResult",
+    "ReasoningService",
+    "reasoning_service",
 ]
