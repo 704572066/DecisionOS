@@ -4,7 +4,8 @@ from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
-
+from app.reasoning.models import Finding
+from app.reasoning.context import EvaluationConstraint
 DecisionStatus = Literal[
     "gathering_information",
     "negotiating",
@@ -12,6 +13,19 @@ DecisionStatus = Literal[
     "ready_to_decide",
 ]
 
+class DecisionBoardReasoning(BaseModel):
+
+    findings: list[Finding] = Field(
+        default_factory=list
+    )
+
+    constraints: list[EvaluationConstraint] = Field(
+        default_factory=list
+    )
+
+    diagnostics: dict = Field(
+        default_factory=dict
+    )
 
 class BoardRisk(BaseModel):
     title: str
@@ -37,6 +51,9 @@ class DecisionBoard(BaseModel):
     meetingId: str
     projectId: str
     contextId: str
+    reasoning: DecisionBoardReasoning = Field(
+        default_factory=DecisionBoardReasoning
+    )
     objective: str = ""
     status: DecisionStatus = "gathering_information"
 
