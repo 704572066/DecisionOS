@@ -97,3 +97,11 @@ print(json.dumps(
     ensure_ascii=False,
     indent=2,
 ))
+
+payload = board.model_dump(mode="json")
+assert "status" not in payload
+assert "decisionReadiness" not in payload
+assert len(payload["risks"]) == 1
+assert len(payload["actions"]) == 1
+assert len(payload["evidence"]) == 2
+print("\nLEGACY CLEANUP ASSERTIONS: OK")

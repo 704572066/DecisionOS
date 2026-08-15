@@ -7,13 +7,6 @@ from pydantic import BaseModel, Field
 from app.reasoning.models import Finding
 from app.reasoning.context import EvaluationConstraint
 from app.reasoning.recommendation_models import Recommendation
-DecisionStatus = Literal[
-    "gathering_information",
-    "negotiating",
-    "waiting_confirmation",
-    "ready_to_decide",
-]
-
 class DecisionBoardReasoning(BaseModel):
 
     findings: list[Finding] = Field(
@@ -60,10 +53,6 @@ class DecisionBoard(BaseModel):
         default_factory=DecisionBoardReasoning
     )
     objective: str = ""
-    status: DecisionStatus = "gathering_information"
-
-    # This means information readiness, not probability that a decision is right.
-    decisionReadiness: int = Field(default=0, ge=0, le=100)
 
     risks: list[BoardRisk] = Field(default_factory=list)
     evidence: list[BoardEvidence] = Field(default_factory=list)

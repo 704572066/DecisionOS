@@ -81,14 +81,6 @@ class DecisionBoardBuilder:
             else reasoning.diagnostics
         )
 
-        status = self._status(
-            state=state,
-            reasoning=reasoning,
-        )
-
-        readiness = self._decision_readiness(
-            reasoning
-        )
 
         return DecisionBoard(
             meetingId=state.meetingId,
@@ -108,9 +100,6 @@ class DecisionBoardBuilder:
 
             objective=state.objective,
 
-            status=status,
-
-            decisionReadiness=readiness,
 
             risks=projection.risks,
 
@@ -221,76 +210,6 @@ class DecisionBoardBuilder:
             )
 
         return output
-
-    @staticmethod
-    def _status(
-        *,
-        state: RuntimeState,
-        reasoning: ReasoningResult,
-    ) -> str:
-        """
-        Minimal generic status projection.
-
-        This is not a business rule engine.
-        """
-
-        active_findings = [
-            item
-            for item in reasoning.findings
-            if item.status == "open"
-        ]
-
-        if active_findings:
-            return "gathering_information"
-
-        if state.decisionState:
-            return "decision_ready"
-
-        return "negotiating"
-
-    @staticmethod
-    def _decision_readiness(
-        reasoning: ReasoningResult,
-    ) -> int:
-        """
-        Temporary generic readiness projection.
-
-        Avoid field-specific scoring.
-
-        Later this should become a dedicated Readiness Reasoner.
-        """
-
-        active = [
-            item
-            for item in reasoning.findings
-            if item.status == "open"
-        ]
-
-        if not active:
-            return 100
-
-        severity_weight = {
-            "critical": 30,
-            "high": 20,
-            "medium": 10,
-            "low": 5,
-        }
-
-        penalty = sum(
-            severity_weight.get(
-                item.severity,
-                10,
-            )
-            for item in active
-        )
-
-        return max(
-            0,
-            100 - min(
-                80,
-                penalty,
-            ),
-        )
 
     @staticmethod
     def _resolved_risks(

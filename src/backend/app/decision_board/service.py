@@ -16,7 +16,7 @@ class DecisionBoardService:
     """
     DecisionBoard service with Reasoning as the only decision authority.
 
-    Legacy DecisionBoardEngine is no longer used here.
+    DecisionBoard contains projection only; reasoning owns decision logic.
     """
 
     async def get(

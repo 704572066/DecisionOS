@@ -31,8 +31,6 @@ type DecisionBoard = {
   projectId: string;
   contextId: string;
   objective: string;
-  status: 'gathering_information'|'negotiating'|'waiting_confirmation'|'ready_to_decide';
-  decisionReadiness: number;
   risks: Array<{title:string;summary:string;severity:'low'|'medium'|'high';sourceIds:string[]}>;
   evidence: Array<{id:string;type:string;title:string;summary:string;score:number}>;
   actions: Array<{text:string;sourceIds:string[]}>;
@@ -232,14 +230,6 @@ function App() {
     }, 5000);
   };
 
-  const boardStatusLabel = (status?: DecisionBoard['status']) => {
-    switch (status) {
-      case 'negotiating': return '谈判中';
-      case 'waiting_confirmation': return '待确认';
-      case 'ready_to_decide': return '可进入决策';
-      default: return '信息收集中';
-    }
-  };
 
   const restoreMeeting = async (targetMeetingId: string) => {
     const data = await fetchJson<MeetingDetails>(
@@ -903,11 +893,6 @@ function App() {
               <div className="decision-board-overview">
                 <span className="board-label">当前目标</span>
                 <strong>{decisionBoard.objective || '尚未识别明确目标'}</strong>
-                <div className="decision-board-status-row">
-                  <div><span>状态</span><strong>{boardStatusLabel(decisionBoard.status)}</strong></div>
-                  <div><span>决策成熟度</span><strong>{decisionBoard.decisionReadiness}</strong></div>
-                </div>
-                <div className="readiness-track"><div className="readiness-value" style={{width: `${decisionBoard.decisionReadiness}%`}} /></div>
               </div>
 
               <section className="board-section priority-layer">
