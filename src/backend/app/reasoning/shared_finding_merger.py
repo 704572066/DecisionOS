@@ -77,6 +77,24 @@ class SharedFindingMerger:
             if item.subject
         }
 
+        # Subjects that are already represented by an enterprise
+        # dependency operand are part of the same underlying issue.
+        #
+        # Example:
+        #   Enterprise:
+        #       discountPercent > 10 requires paymentTermAssessment
+        #
+        #   General:
+        #       missing_information / paymentTermAssessment
+        #
+        # The General finding is a restatement of the enterprise
+        # dependency and must be suppressed.
+        enterprise_operand_subjects = (
+            self._enterprise_operand_subjects(
+                enterprise_findings
+            )
+        )
+
         seen_general_fingerprints: set[str] = set()
 
         for finding in general_findings:
@@ -101,6 +119,17 @@ class SharedFindingMerger:
                 )
                 if key in enterprise_subjects:
                     reason = "enterprise_subject_already_covered"
+
+                elif (
+                    self._is_general_missing_information(
+                        finding
+                    )
+                    and key
+                    in enterprise_operand_subjects
+                ):
+                    reason = (
+                        "enterprise_dependency_operand_already_covered"
+                    )
 
             if (
                 not reason
@@ -134,6 +163,74 @@ class SharedFindingMerger:
             contextId=context_id,
             findings=merged,
             diagnostics=diagnostics.as_dict(),
+        )
+
+    @classmethod
+    def _enterprise_operand_subjects(
+        cls,
+        findings: list[Finding],
+    ) -> set[tuple[str, str]]:
+        output: set[tuple[str, str]] = set()
+
+        for finding in findings:
+            attributes = dict(
+                finding.attributes or {}
+            )
+
+            operand = attributes.get(
+                "operand"
+            )
+
+            if not isinstance(
+                operand,
+                dict,
+            ):
+                continue
+
+            subject = cls._normalize(
+                operand.get(
+                    "subject",
+                    ""
+                )
+            )
+
+            if not subject:
+                continue
+
+            operand_domain = cls._normalize(
+                operand.get(
+                    "domain",
+                    ""
+                )
+                or finding.domain
+            )
+
+            output.add(
+                (
+                    operand_domain,
+                    subject,
+                )
+            )
+
+        return output
+
+    @staticmethod
+    def _is_general_missing_information(
+        finding: Finding,
+    ) -> bool:
+        attributes = dict(
+            finding.attributes or {}
+        )
+
+        return (
+            attributes.get(
+                "reasoningSource"
+            )
+            == "general"
+            and attributes.get(
+                "generalFindingType"
+            )
+            == "missing_information"
         )
 
     @staticmethod

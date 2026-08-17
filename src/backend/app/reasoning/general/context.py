@@ -78,9 +78,19 @@ class GeneralReasoningContextBuilder:
     """
     Build the minimal context needed by General Reasoner.
 
-    Enterprise knowledge is not treated as truth here. Reranked evidence
-    is exposed only as source material. General Reasoner focuses on
-    decision-relevant signals in the current situation.
+    Build a grounded situation context for General Reasoner.
+
+    Authority hierarchy:
+        semantic / decision state
+            >
+        recent events
+            >
+        conversation text window
+            >
+        retrieved enterprise/history references
+
+    Conversation text is useful evidence, but it is not authoritative
+    current state when structured state already exists.
     """
 
     def build(
@@ -116,12 +126,14 @@ class GeneralReasoningContextBuilder:
         sources: list[GeneralReasoningSource] = [
             GeneralReasoningSource(
                 id=context_source_id,
-                sourceType="runtime",
-                title="Current conversation context",
+                sourceType="conversation_text",
+                title="Conversation text window",
                 summary=state.canonicalContext,
                 metadata={
                     "meetingId": state.meetingId,
                     "contextId": state.contextId,
+                    "authority": "conversation_text",
+                    "currentStateAuthority": False,
                 },
             )
         ]
@@ -197,9 +209,13 @@ class GeneralReasoningContextBuilder:
                     ),
                     value=event.get("value"),
                     confidence=1.0,
-                    metadata=dict(
-                        event.get("metadata") or {}
-                    ),
+                    metadata={
+                        **dict(
+                            event.get("metadata") or {}
+                        ),
+                        "authority": "recent_event",
+                        "currentStateAuthority": True,
+                    },
                 )
             )
 
@@ -254,6 +270,8 @@ class GeneralReasoningContextBuilder:
                             "relation": item.get("relation", ""),
                             "kind": item.get("kind", ""),
                             "target": item.get("target", ""),
+                            "authority": "semantic_state",
+                            "currentStateAuthority": True,
                         },
                     )
                 )
@@ -304,13 +322,55 @@ class GeneralReasoningContextBuilder:
                         0.0,
                         min(1.0, confidence),
                     ),
-                    metadata={
-                        "historicalReference": True,
-                    },
+                    metadata=(
+                        GeneralReasoningContextBuilder
+                        ._retrieval_metadata(
+                            str(
+                                item.get("sourceType")
+                                or item.get("objectType")
+                                or "knowledge"
+                            )
+                        )
+                    ),
                 )
             )
 
         return output
+
+    @staticmethod
+    def _retrieval_metadata(
+        source_type: str,
+    ) -> dict[str, Any]:
+        normalized = str(
+            source_type or ""
+        ).strip().lower()
+
+        if normalized == "policy":
+            return {
+                "authority": "normative_reference",
+                "normativeReference": True,
+                "historicalReference": False,
+                "currentStateAuthority": False,
+            }
+
+        if normalized in {
+            "decision",
+            "document",
+            "crm",
+        }:
+            return {
+                "authority": "historical_reference",
+                "normativeReference": False,
+                "historicalReference": True,
+                "currentStateAuthority": False,
+            }
+
+        return {
+            "authority": "reference",
+            "normativeReference": False,
+            "historicalReference": False,
+            "currentStateAuthority": False,
+        }
 
     @staticmethod
     def _dedupe_sources(

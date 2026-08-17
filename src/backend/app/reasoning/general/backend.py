@@ -117,17 +117,19 @@ class LLMGeneralReasonerBackend(
             "meetingId": context.meetingId,
             "contextId": context.contextId,
             "objective": context.objective,
-            "canonicalContext": (
-                context.canonicalContext
-            ),
-            "semanticState": (
-                context.semanticState
-            ),
-            "decisionState": (
-                context.decisionState
-            ),
+            "currentSituation": {
+                "semanticState": (
+                    context.semanticState
+                ),
+                "decisionState": (
+                    context.decisionState
+                ),
+            },
             "recentEvents": (
                 context.recentEvents
+            ),
+            "conversationText": (
+                context.canonicalContext
             ),
             "activePolicyFindings": (
                 policy_findings
@@ -136,9 +138,15 @@ class LLMGeneralReasonerBackend(
                 context.dialogueHistory
             ),
             "availableSources": sources,
-            "currentContextSourceId": (
+            "conversationTextSourceId": (
                 context.contextSourceId
             ),
+            "authorityOrder": [
+                "currentSituation",
+                "recentEvents",
+                "conversationText",
+                "availableSources",
+            ],
         }
 
         return (
