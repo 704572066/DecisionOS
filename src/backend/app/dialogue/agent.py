@@ -50,6 +50,19 @@ If the context says:
 you must not summarize it as:
     "the customer changed to this condition".
 
+Interpret semantic objects using actor + role + status together.
+In particular:
+- customer + requirement + confirmed means the customer requirement is
+  clearly established;
+- it does NOT mean both sides accepted the condition;
+- confirmed requirement is not mutual acceptance or final agreement.
+
+Prefer wording such as:
+    "客户明确表示只接受10%的折扣条件"
+instead of:
+    "客户最终接受10%的折扣"
+unless mutual acceptance is explicitly supported by the supplied state.
+
 3. CURRENT VS HISTORICAL
 Rejected or withdrawn conditions are historical positions.
 They may be mentioned when explaining what happened, but must not be
@@ -58,6 +71,18 @@ described as current valid conditions.
 Historical decisions, documents, CRM records, and prior cases are
 evidence/reference only. They are not automatically current facts,
 current policy, or current decisions.
+
+Never insert historical/reference evidence into the current-meeting
+chronology. Reconstruct what happened in this meeting only from:
+- currentSituation;
+- recentEvents;
+- canonicalContext when the attribution is clear.
+
+If evidence contains a historical 8% decision, you may say:
+    "历史资料中存在8%的参考案例"
+but you must not say:
+    "我们刚才提出8%"
+unless the current-meeting state/events explicitly support it.
 
 4. FINDINGS AND RECOMMENDATIONS
 Findings are issues DecisionOS has detected.

@@ -23,6 +23,10 @@ from app.reasoning.recommendation_set_evaluator import (
     RecommendationSetEvaluator,
 )
 from app.runtime.models import RuntimeState
+from app.reasoning.snapshot_store import (
+    ReasoningSnapshotStore,
+    reasoning_snapshot_store,
+)
 
 
 class ReasoningService:
@@ -67,6 +71,7 @@ class ReasoningService:
         compiler: ConstraintCompiler | None = None,
         finding_evaluator: FindingSetEvaluator | None = None,
         recommendation_evaluator: RecommendationSetEvaluator | None = None,
+        snapshot_store: ReasoningSnapshotStore | None = None,
     ) -> None:
         self.context_builder = (
             context_builder
@@ -100,6 +105,38 @@ class ReasoningService:
             if recommendation_evaluator is not None
             else RecommendationSetEvaluator()
         )
+
+        self.snapshot_store = (
+            snapshot_store
+            if snapshot_store is not None
+            else reasoning_snapshot_store
+        )
+
+    async def get_or_reason(
+        self,
+        state: RuntimeState,
+        *,
+        force: bool = False,
+    ) -> ReasoningResult:
+        """Return the shared reasoning snapshot for this RuntimeState.
+
+        Lifecycle-aware reasoning must execute at most once for one
+        RuntimeState revision. All interaction surfaces consume the same
+        result. ``force`` is reserved for an explicit reasoning refresh.
+        """
+        if not force:
+            cached = self.snapshot_store.get(state)
+            if cached is not None:
+                return cached
+
+        async with self.snapshot_store.lock(state.meetingId):
+            if not force:
+                cached = self.snapshot_store.get(state)
+                if cached is not None:
+                    return cached
+
+            result = await self.reason(state)
+            return self.snapshot_store.put(state, result)
 
     async def reason(
         self,

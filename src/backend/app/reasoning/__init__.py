@@ -100,6 +100,12 @@ from app.reasoning.recommendation_lifecycle import (
 )
 from .finding_repository import FindingRepository
 from .finding_lifecycle import FindingLifecycleManager
+
+from app.reasoning.snapshot_store import (
+    ReasoningSnapshot,
+    ReasoningSnapshotStore,
+    reasoning_snapshot_store,
+)
 __all__ = [
     "ConstraintEffect",
     "ConstraintOperand",
@@ -143,6 +149,9 @@ __all__ = [
     "ReasoningResult",
     "ReasoningService",
     "reasoning_service",
+    "ReasoningSnapshot",
+    "ReasoningSnapshotStore",
+    "reasoning_snapshot_store",
     "KnowledgeCompilationGovernance",
     "KnowledgeEligibility",
     "knowledge_compilation_governance",

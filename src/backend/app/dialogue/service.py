@@ -63,7 +63,7 @@ class DialogueService:
             )
         )
 
-        reasoning = await reasoning_service.reason(
+        reasoning = await reasoning_service.get_or_reason(
             state
         )
 
