@@ -286,6 +286,11 @@ class ReasoningDiagnostics(BaseModel):
     activeFindingCount: int = 0
     resolvedFindingCount: int = 0
 
+    enterpriseFindingCount: int = 0
+    generalFindingCount: int = 0
+    mergedFindingCount: int = 0
+    suppressedGeneralFindingCount: int = 0
+
     generatedRecommendationCount: int = 0
     activeRecommendationCount: int = 0
     obsoleteRecommendationCount: int = 0

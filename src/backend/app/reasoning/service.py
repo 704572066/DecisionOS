@@ -12,6 +12,16 @@ from app.reasoning.context_builder import (
 from app.reasoning.finding_set_evaluator import (
     FindingSetEvaluator,
 )
+from app.reasoning.general import (
+    GeneralReasoner,
+    GeneralReasoningContextBuilder,
+    general_reasoner,
+    general_reasoning_context_builder,
+)
+from app.reasoning.shared_finding_merger import (
+    SharedFindingMerger,
+    shared_finding_merger,
+)
 from app.reasoning.llm_constraint_compiler import (
     LLMConstraintCompilerBackend,
 )
@@ -70,6 +80,9 @@ class ReasoningService:
         context_builder: EvaluationContextBuilder | None = None,
         compiler: ConstraintCompiler | None = None,
         finding_evaluator: FindingSetEvaluator | None = None,
+        general_context_builder: GeneralReasoningContextBuilder | None = None,
+        general_reasoner_instance: GeneralReasoner | None = None,
+        finding_merger: SharedFindingMerger | None = None,
         recommendation_evaluator: RecommendationSetEvaluator | None = None,
         snapshot_store: ReasoningSnapshotStore | None = None,
     ) -> None:
@@ -98,6 +111,24 @@ class ReasoningService:
             finding_evaluator
             if finding_evaluator is not None
             else FindingSetEvaluator()
+        )
+
+        self.general_context_builder = (
+            general_context_builder
+            if general_context_builder is not None
+            else general_reasoning_context_builder
+        )
+
+        self.general_reasoner = (
+            general_reasoner_instance
+            if general_reasoner_instance is not None
+            else general_reasoner
+        )
+
+        self.finding_merger = (
+            finding_merger
+            if finding_merger is not None
+            else shared_finding_merger
         )
 
         self.recommendation_evaluator = (
@@ -304,7 +335,115 @@ class ReasoningService:
 
         #
         # ------------------------------------------------------------
-        # 4. FindingSet -> RecommendationSet
+        # 4. RuntimeState + Policy Findings -> General Findings
+        # ------------------------------------------------------------
+        #
+        general_findings = []
+
+        try:
+            general_context = (
+                self.general_context_builder.build(
+                    state,
+                    policy_findings=finding_set.findings,
+                )
+            )
+
+            general_result = (
+                await self.general_reasoner.reason(
+                    general_context
+                )
+            )
+
+            general_findings = list(
+                general_result.findings
+            )
+
+            diagnostics.generalFindingCount = len(
+                general_findings
+            )
+
+            diagnostics.metadata[
+                "generalReasoning"
+            ] = general_result.diagnostics.model_dump(
+                mode="json"
+            )
+
+        except Exception as exc:
+            # General reasoning is additive. Enterprise-policy reasoning
+            # remains authoritative even when General Reasoner fails.
+            diagnostics.evaluationErrors.append(
+                f"general_reasoner: {exc}"
+            )
+
+            diagnostics.metadata[
+                "generalReasoning"
+            ] = {
+                "error": str(exc),
+            }
+
+        #
+        # ------------------------------------------------------------
+        # 5. Enterprise Findings + General Findings -> Shared Findings
+        # ------------------------------------------------------------
+        #
+        try:
+            shared_finding_set = (
+                self.finding_merger.merge(
+                    meeting_id=context.meetingId,
+                    context_id=context.contextId,
+                    enterprise_findings=(
+                        finding_set.findings
+                    ),
+                    general_findings=(
+                        general_findings
+                    ),
+                )
+            )
+
+            merge_diagnostics = dict(
+                shared_finding_set.diagnostics
+                or {}
+            )
+
+            diagnostics.enterpriseFindingCount = len(
+                finding_set.findings
+            )
+            diagnostics.mergedFindingCount = len(
+                shared_finding_set.findings
+            )
+            diagnostics.suppressedGeneralFindingCount = int(
+                merge_diagnostics.get(
+                    "suppressedGeneralFindingCount",
+                    0,
+                )
+            )
+
+            diagnostics.activeFindingCount = sum(
+                1
+                for item in shared_finding_set.findings
+                if item.status != "resolved"
+            )
+
+            diagnostics.metadata[
+                "sharedFindingMerge"
+            ] = merge_diagnostics
+
+        except Exception as exc:
+            diagnostics.evaluationErrors.append(
+                f"shared_finding_merger: {exc}"
+            )
+
+            shared_finding_set = finding_set
+            diagnostics.enterpriseFindingCount = len(
+                finding_set.findings
+            )
+            diagnostics.mergedFindingCount = len(
+                finding_set.findings
+            )
+
+        #
+        # ------------------------------------------------------------
+        # 6. Shared FindingSet -> RecommendationSet
         # ------------------------------------------------------------
         #
         try:
@@ -312,7 +451,7 @@ class ReasoningService:
                 self.recommendation_evaluator.evaluate(
                     meeting_id=context.meetingId,
                     context_id=context.contextId,
-                    findings=finding_set.findings,
+                    findings=shared_finding_set.findings,
                 )
             )
 
@@ -355,7 +494,7 @@ class ReasoningService:
                 meetingId=context.meetingId,
                 contextId=context.contextId,
                 projectId=context.projectId,
-                findings=finding_set.findings,
+                findings=shared_finding_set.findings,
                 constraints=compilation.constraints,
                 recommendations=[],
                 diagnostics=diagnostics,
@@ -370,7 +509,7 @@ class ReasoningService:
             meetingId=context.meetingId,
             contextId=context.contextId,
             projectId=context.projectId,
-            findings=finding_set.findings,
+            findings=shared_finding_set.findings,
             constraints=compilation.constraints,
             recommendations=(
                 recommendation_set.recommendations

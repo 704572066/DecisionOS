@@ -191,6 +191,19 @@ class RecommendationGenerator:
             ),
         }
 
+        for key in (
+            "reasoningSource",
+            "generalFindingType",
+            "decisionRelevance",
+            "specificity",
+            "evidenceDirectness",
+            "noveltyKey",
+        ):
+            if key in attributes:
+                recommendation_attributes[key] = (
+                    attributes[key]
+                )
+
         constraint_id = attributes.get(
             "constraintId"
         )
@@ -313,6 +326,16 @@ class RecommendationGenerator:
         operand: dict[str, Any] | None,
     ) -> str:
 
+        attributes = dict(
+            finding.attributes or {}
+        )
+
+        if (
+            attributes.get("reasoningSource")
+            == "general"
+        ):
+            return finding.title
+
         if operand:
             operand_subject = str(
                 operand.get("subject")
@@ -369,6 +392,22 @@ class RecommendationGenerator:
         finding: Finding,
         operand: dict[str, Any] | None,
     ) -> str:
+
+        attributes = dict(
+            finding.attributes or {}
+        )
+
+        if (
+            attributes.get("reasoningSource")
+            == "general"
+        ):
+            suggested_action = str(
+                attributes.get("suggestedAction")
+                or ""
+            ).strip()
+
+            if suggested_action:
+                return suggested_action
 
         if operand:
             operand_subject = str(

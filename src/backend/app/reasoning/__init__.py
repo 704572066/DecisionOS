@@ -170,4 +170,12 @@ __all__ = [
     "recommendation_repository",
     "RecommendationLifecycleManager",
     "recommendation_lifecycle_manager",
+    "SharedFindingMergeDiagnostics",
+    "SharedFindingMerger",
+    "shared_finding_merger",
 ]
+from app.reasoning.shared_finding_merger import (
+    SharedFindingMergeDiagnostics,
+    SharedFindingMerger,
+    shared_finding_merger,
+)

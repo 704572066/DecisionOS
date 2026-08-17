@@ -31,7 +31,7 @@ class DecisionBoardService:
             )
         )
 
-        reasoning = await reasoning_service.reason(
+        reasoning = await reasoning_service.get_or_reason(
             state
         )
 
@@ -52,8 +52,9 @@ class DecisionBoardService:
             )
         )
 
-        reasoning = await reasoning_service.reason(
-            state
+        reasoning = await reasoning_service.get_or_reason(
+            state,
+            force=True,
         )
 
         return decision_board_builder.build(
