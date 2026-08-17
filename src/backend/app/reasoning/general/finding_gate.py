@@ -110,6 +110,18 @@ class FindingGate:
             candidate,
         )
 
+        authority_decision = self._state_authority_guard(
+            context, candidate, source_ids
+        )
+        if authority_decision is not None:
+            return authority_decision
+
+        compatibility_decision = self._semantic_compatibility_guard(
+            candidate
+        )
+        if compatibility_decision is not None:
+            return compatibility_decision
+
         if not source_ids:
             return FindingGateDecision(
                 accepted=False,
@@ -208,6 +220,81 @@ class FindingGate:
                 },
             )
 
+        return None
+
+
+    @staticmethod
+    def _state_authority_guard(
+        context: GeneralReasoningContext,
+        candidate: GeneralFindingCandidate,
+        source_ids: list[str],
+    ) -> FindingGateDecision | None:
+        """Do not let conversation/history override structured current state."""
+        source_map = context.source_by_id()
+        used = [source_map.get(source_id) for source_id in source_ids]
+        used = [item for item in used if item is not None]
+        uses_conversation = context.contextSourceId in source_ids
+
+        subject = "".join(str(candidate.subject or "").lower().split())
+        authoritative_for_subject = []
+        for source in context.sources:
+            if not bool((source.metadata or {}).get("currentStateAuthority")):
+                continue
+            field = "".join(str(source.field or "").lower().split())
+            if subject and field == subject:
+                authoritative_for_subject.append(source)
+
+        if uses_conversation and authoritative_for_subject:
+            used_authoritative_ids = {
+                source.id for source in used
+                if bool((source.metadata or {}).get("currentStateAuthority"))
+                and "".join(str(source.field or "").lower().split()) == subject
+            }
+            if not used_authoritative_ids:
+                return FindingGateDecision(
+                    accepted=False,
+                    reason="conversation_cannot_override_current_state",
+                    details={
+                        "subject": candidate.subject,
+                        "authoritativeSourceIds": [
+                            source.id for source in authoritative_for_subject
+                        ],
+                    },
+                )
+
+        return None
+
+    @staticmethod
+    def _semantic_compatibility_guard(
+        candidate: GeneralFindingCandidate,
+    ) -> FindingGateDecision | None:
+        """Reject direct comparisons between semantically different metrics."""
+        text = " ".join([
+            candidate.subject or "",
+            candidate.title or "",
+            candidate.summary or "",
+        ]).lower()
+        discount_terms = ("discountpercent", "折扣", "降价")
+        margin_terms = ("grossmarginpercent", "毛利率", "利润率")
+        has_discount = any(term in text for term in discount_terms)
+        has_margin = any(term in text for term in margin_terms)
+        conflict_language = any(term in text for term in (
+            "冲突", "突破", "低于", "高于", "等于", "直接", "conflict", "below", "above"
+        ))
+        if (
+            candidate.type == "contradiction"
+            and has_discount
+            and has_margin
+            and conflict_language
+        ):
+            return FindingGateDecision(
+                accepted=False,
+                reason="incompatible_metric_comparison",
+                details={
+                    "metrics": ["discountPercent", "grossMarginPercent"],
+                    "requirement": "explicit_conversion_or_calculation_required",
+                },
+            )
         return None
 
     def _missing_information_discipline(

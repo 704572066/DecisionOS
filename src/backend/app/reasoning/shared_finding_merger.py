@@ -120,16 +120,19 @@ class SharedFindingMerger:
                 if key in enterprise_subjects:
                     reason = "enterprise_subject_already_covered"
 
-                elif (
-                    self._is_general_missing_information(
-                        finding
-                    )
-                    and key
-                    in enterprise_operand_subjects
-                ):
-                    reason = (
-                        "enterprise_dependency_operand_already_covered"
-                    )
+                elif self._is_general_missing_information(finding):
+                    # Phase 2.2: LLM domains are advisory. Operand coverage is
+                    # determined primarily by canonical subject identity so a
+                    # `general/paymentTermAssessment` restatement is still
+                    # suppressed by a `commercial` enterprise dependency.
+                    normalized_subject = self._normalize(finding.subject)
+                    if any(
+                        operand_subject == normalized_subject
+                        for _, operand_subject in enterprise_operand_subjects
+                    ):
+                        reason = (
+                            "enterprise_dependency_operand_already_covered"
+                        )
 
             if (
                 not reason

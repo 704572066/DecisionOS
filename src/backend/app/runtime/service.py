@@ -54,32 +54,45 @@ class RuntimeStateService:
             },
         )
 
-        latest_segment = self._latest_final_segment(db,meeting.id,)
-
-        latest_text = (
-            latest_segment.text.strip()
-            if latest_segment
-            else state.canonicalContext
+        # Phase 2.2: build state by replaying every final transcript segment
+        # in sequence. Processing only the latest segment loses intermediate
+        # proposals/rejections and leaves semanticState stale.
+        pending_segments = self._final_segments_after(
+            db, meeting.id, 0
         )
-
-        if not latest_text:
-            latest_text = state.canonicalContext
-
-        events = await hybrid_event_extractor.extract(
-            meeting.id,
-            latest_text,
-            previous,
-            semantic_enabled=bool(
-                getattr(settings, "semantic_event_enabled", True)
-            ),
-            meeting_date=meeting.created_at,
-        )
-        state = runtime_state_reducer.apply(state, events)
-        if latest_segment is not None:
-            state.lastProcessedSegmentSequence = (
-                latest_segment.sequence
+        extracted_count = 0
+        for segment in pending_segments:
+            text = (segment.text or "").strip()
+            if not text:
+                continue
+            events = await hybrid_event_extractor.extract(
+                meeting.id,
+                text,
+                state,
+                semantic_enabled=bool(
+                    getattr(settings, "semantic_event_enabled", True)
+                ),
+                meeting_date=meeting.created_at,
             )
-        state.diagnostics["eventsExtracted"] = len(events)
+            state = runtime_state_reducer.apply(state, events)
+            state.lastProcessedSegmentSequence = segment.sequence
+            extracted_count += len(events)
+
+        # Backward-compatible fallback for meetings without persisted segments.
+        if not pending_segments and state.canonicalContext:
+            events = await hybrid_event_extractor.extract(
+                meeting.id,
+                state.canonicalContext,
+                state,
+                semantic_enabled=bool(
+                    getattr(settings, "semantic_event_enabled", True)
+                ),
+                meeting_date=meeting.created_at,
+            )
+            state = runtime_state_reducer.apply(state, events)
+            extracted_count += len(events)
+
+        state.diagnostics["eventsExtracted"] = extracted_count
 
         return runtime_state_store.put(state)
 
@@ -93,32 +106,32 @@ class RuntimeStateService:
         if cached is None:
             return await self.refresh(db, meeting)
 
-        latest_segment = self._latest_final_segment(
+        pending_segments = self._final_segments_after(
             db,
             meeting.id,
+            cached.lastProcessedSegmentSequence,
         )
-
-        if latest_segment is None:
+        if not pending_segments:
             return cached
 
-        if (
-            latest_segment.sequence
-            <= cached.lastProcessedSegmentSequence
-        ):
-            return cached
-
-        updated = await self.apply_semantic_transcript_event(
-            meeting,
-            latest_segment.text,
-        )
-
-        if updated is not None:
-            updated.lastProcessedSegmentSequence = (
-                latest_segment.sequence
+        updated = cached
+        extracted_count = 0
+        for segment in pending_segments:
+            events = await hybrid_event_extractor.extract(
+                meeting.id,
+                (segment.text or "").strip(),
+                updated,
+                semantic_enabled=bool(
+                    getattr(settings, "semantic_event_enabled", True)
+                ),
+                meeting_date=meeting.created_at,
             )
-            return runtime_state_store.put(updated)
+            updated = runtime_state_reducer.apply(updated, events)
+            updated.lastProcessedSegmentSequence = segment.sequence
+            extracted_count += len(events)
 
-        return cached
+        updated.diagnostics["eventsExtractedSemantic"] = extracted_count
+        return runtime_state_store.put(updated)
 
     async def apply_semantic_transcript_event(
         self,
@@ -204,6 +217,24 @@ class RuntimeStateService:
                     output["paymentTermDays"] = int(match.group(1))
 
         return output
+
+
+    @staticmethod
+    def _final_segments_after(
+        db: Session,
+        meeting_id: str,
+        after_sequence: int,
+    ) -> list[MeetingTranscriptSegment]:
+        stmt = (
+            select(MeetingTranscriptSegment)
+            .where(
+                MeetingTranscriptSegment.meeting_id == meeting_id,
+                MeetingTranscriptSegment.is_final.is_(True),
+                MeetingTranscriptSegment.sequence > after_sequence,
+            )
+            .order_by(MeetingTranscriptSegment.sequence.asc())
+        )
+        return list(db.scalars(stmt).all())
 
     @staticmethod
     def _latest_final_segment(
