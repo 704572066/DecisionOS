@@ -290,6 +290,7 @@ class ReasoningDiagnostics(BaseModel):
     generalFindingCount: int = 0
     mergedFindingCount: int = 0
     suppressedGeneralFindingCount: int = 0
+    normativeSuppressedGeneralFindingCount: int = 0
 
     generatedRecommendationCount: int = 0
     activeRecommendationCount: int = 0

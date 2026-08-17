@@ -52,21 +52,13 @@ class RuntimeStateService:
                 "reminder": result.get("diagnostics") or {},
                 "retrieval": retrieval.get("diagnostics") or {},
             },
-            # Preserve the durable in-memory processing cursor when refresh
-            # rebuilds the retrieval/context portion of RuntimeState.
-            lastProcessedSegmentSequence=(
-                previous.lastProcessedSegmentSequence if previous else 0
-            ),
         )
 
-        # Phase 2.2.1: consume only final segments newer than the preserved
-        # cursor. A refresh must never replay already-applied semantic events.
+        # Phase 2.2: build state by replaying every final transcript segment
         # in sequence. Processing only the latest segment loses intermediate
         # proposals/rejections and leaves semanticState stale.
         pending_segments = self._final_segments_after(
-            db,
-            meeting.id,
-            state.lastProcessedSegmentSequence,
+            db, meeting.id, 0
         )
         extracted_count = 0
         for segment in pending_segments:
@@ -86,14 +78,8 @@ class RuntimeStateService:
             state.lastProcessedSegmentSequence = segment.sequence
             extracted_count += len(events)
 
-        # Backward-compatible bootstrap only for a brand-new meeting that has
-        # no persisted final segments. Replaying canonicalContext on a normal
-        # refresh would reintroduce superseded historical conditions.
-        if (
-            previous is None
-            and not pending_segments
-            and state.canonicalContext
-        ):
+        # Backward-compatible fallback for meetings without persisted segments.
+        if not pending_segments and state.canonicalContext:
             events = await hybrid_event_extractor.extract(
                 meeting.id,
                 state.canonicalContext,

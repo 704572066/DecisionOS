@@ -29,6 +29,10 @@ from app.reasoning.models import (
     ReasoningDiagnostics,
     ReasoningResult,
 )
+from app.reasoning.normative_boundary_guard import (
+    NormativeBoundaryGuard,
+    normative_boundary_guard,
+)
 from app.reasoning.recommendation_set_evaluator import (
     RecommendationSetEvaluator,
 )
@@ -83,6 +87,7 @@ class ReasoningService:
         general_context_builder: GeneralReasoningContextBuilder | None = None,
         general_reasoner_instance: GeneralReasoner | None = None,
         finding_merger: SharedFindingMerger | None = None,
+        normative_guard: NormativeBoundaryGuard | None = None,
         recommendation_evaluator: RecommendationSetEvaluator | None = None,
         snapshot_store: ReasoningSnapshotStore | None = None,
     ) -> None:
@@ -129,6 +134,12 @@ class ReasoningService:
             finding_merger
             if finding_merger is not None
             else shared_finding_merger
+        )
+
+        self.normative_guard = (
+            normative_guard
+            if normative_guard is not None
+            else normative_boundary_guard
         )
 
         self.recommendation_evaluator = (
@@ -383,7 +394,65 @@ class ReasoningService:
 
         #
         # ------------------------------------------------------------
-        # 5. Enterprise Findings + General Findings -> Shared Findings
+        # 5. Normative Boundary Guard
+        # ------------------------------------------------------------
+        #
+        # General Reasoner may discuss enterprise knowledge, but compiled
+        # EvaluationConstraint semantics remain authoritative for normative
+        # applicability. This deterministic guard prevents General Reasoner
+        # from turning `> 10` into `>= 10`, or otherwise inventing policy
+        # requirements whose structured precondition is false.
+        #
+        normative_suppressed_count = 0
+
+        try:
+            normative_result = self.normative_guard.apply(
+                context=context,
+                constraints=compilation.constraints,
+                enterprise_findings=finding_set.findings,
+                general_findings=general_findings,
+            )
+
+            general_findings = list(
+                normative_result.findings
+            )
+
+            normative_diagnostics = dict(
+                normative_result.diagnostics
+                or {}
+            )
+
+            normative_suppressed_count = int(
+                normative_diagnostics.get(
+                    "suppressedGeneralFindingCount",
+                    0,
+                )
+            )
+
+            diagnostics.normativeSuppressedGeneralFindingCount = (
+                normative_suppressed_count
+            )
+
+            diagnostics.metadata[
+                "normativeBoundaryGuard"
+            ] = normative_diagnostics
+
+        except Exception as exc:
+            # Fail open for additive General reasoning. Enterprise findings
+            # remain authoritative and the error is visible in diagnostics.
+            diagnostics.evaluationErrors.append(
+                f"normative_boundary_guard: {exc}"
+            )
+
+            diagnostics.metadata[
+                "normativeBoundaryGuard"
+            ] = {
+                "error": str(exc),
+            }
+
+        #
+        # ------------------------------------------------------------
+        # 6. Enterprise Findings + General Findings -> Shared Findings
         # ------------------------------------------------------------
         #
         try:
@@ -411,10 +480,13 @@ class ReasoningService:
             diagnostics.mergedFindingCount = len(
                 shared_finding_set.findings
             )
-            diagnostics.suppressedGeneralFindingCount = int(
-                merge_diagnostics.get(
-                    "suppressedGeneralFindingCount",
-                    0,
+            diagnostics.suppressedGeneralFindingCount = (
+                normative_suppressed_count
+                + int(
+                    merge_diagnostics.get(
+                        "suppressedGeneralFindingCount",
+                        0,
+                    )
                 )
             )
 
@@ -443,7 +515,7 @@ class ReasoningService:
 
         #
         # ------------------------------------------------------------
-        # 6. Shared FindingSet -> RecommendationSet
+        # 7. Shared FindingSet -> RecommendationSet
         # ------------------------------------------------------------
         #
         try:
@@ -502,7 +574,7 @@ class ReasoningService:
 
         #
         # ------------------------------------------------------------
-        # 5. Unified ReasoningResult
+        # 8. Unified ReasoningResult
         # ------------------------------------------------------------
         #
         return ReasoningResult(
