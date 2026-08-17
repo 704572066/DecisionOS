@@ -26,6 +26,9 @@ class StaticBackend(GeneralReasonerBackend):
                 severity="high",
                 confidence=0.91,
                 decisionRelevance=0.95,
+                specificity=0.95,
+                evidenceDirectness=0.95,
+                directlyObserved=True,
                 evidenceSourceIds=[
                     context.contextSourceId,
                 ],
@@ -46,6 +49,9 @@ class StaticBackend(GeneralReasonerBackend):
                 severity="medium",
                 confidence=0.88,
                 decisionRelevance=0.90,
+                specificity=0.90,
+                evidenceDirectness=0.90,
+                directlyObserved=True,
                 evidenceSourceIds=[
                     context.contextSourceId,
                 ],
@@ -60,6 +66,9 @@ class StaticBackend(GeneralReasonerBackend):
                 title="普通背景信息",
                 confidence=0.90,
                 decisionRelevance=0.20,
+                specificity=0.90,
+                evidenceDirectness=0.90,
+                directlyObserved=True,
                 evidenceSourceIds=[
                     context.contextSourceId,
                 ],
@@ -148,7 +157,7 @@ async def main():
         == "要求提供行业增长预测的数据来源和计算依据。"
     )
 
-    print("\nGENERAL REASONER PHASE 1: OK")
+    print("\nGENERAL REASONER PHASE 1.1: OK")
 
 
 asyncio.run(main())

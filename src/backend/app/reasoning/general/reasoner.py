@@ -20,15 +20,11 @@ from app.reasoning.general.models import (
 
 class GeneralReasoner:
     """
-    Phase-1 standalone General Reasoner.
+    Standalone General Reasoner.
 
-    It is intentionally NOT wired into ReasoningService yet.
-
-    Pipeline:
-        GeneralReasoningContext
-            -> backend candidate proposal
-            -> deterministic FindingGate
-            -> standard Finding[]
+    Phase 1.1 adds an intervention budget after deterministic Gate
+    validation. A real-time monitor should surface only the most salient
+    signals, even if the backend proposes more.
     """
 
     def __init__(
@@ -36,6 +32,7 @@ class GeneralReasoner:
         *,
         backend: GeneralReasonerBackend | None = None,
         gate: FindingGate | None = None,
+        max_findings_per_cycle: int = 5,
     ) -> None:
         self.backend = (
             backend
@@ -46,6 +43,10 @@ class GeneralReasoner:
             gate
             if gate is not None
             else finding_gate
+        )
+        self.max_findings_per_cycle = max(
+            1,
+            max_findings_per_cycle,
         )
 
     async def reason(
@@ -62,9 +63,7 @@ class GeneralReasoner:
                 context
             )
         except Exception as exc:
-            diagnostics.backendErrors.append(
-                str(exc)
-            )
+            diagnostics.backendErrors.append(str(exc))
             return GeneralReasoningResult(
                 meetingId=context.meetingId,
                 contextId=context.contextId,
@@ -72,11 +71,9 @@ class GeneralReasoner:
                 diagnostics=diagnostics,
             )
 
-        diagnostics.candidateCount = len(
-            candidates
-        )
+        diagnostics.candidateCount = len(candidates)
 
-        findings = []
+        accepted_pairs = []
         rejected = []
         seen_fingerprints: set[str] = set()
 
@@ -86,10 +83,7 @@ class GeneralReasoner:
                 candidate,
             )
 
-            if (
-                not decision.accepted
-                or decision.finding is None
-            ):
+            if not decision.accepted or decision.finding is None:
                 rejected.append(
                     GeneralRejectedCandidate(
                         candidate=candidate,
@@ -107,25 +101,64 @@ class GeneralReasoner:
                         candidate=candidate,
                         reason="duplicate_novelty_key",
                         details={
-                            "fingerprint": (
-                                finding.fingerprint
-                            )
+                            "fingerprint": finding.fingerprint,
                         },
                     )
                 )
                 continue
 
-            seen_fingerprints.add(
-                finding.fingerprint
-            )
-            findings.append(finding)
+            seen_fingerprints.add(finding.fingerprint)
 
-        diagnostics.acceptedCount = len(
-            findings
+            accepted_pairs.append(
+                (
+                    self.gate.intervention_score(candidate),
+                    candidate,
+                    finding,
+                )
+            )
+
+        accepted_pairs.sort(
+            key=lambda item: item[0],
+            reverse=True,
         )
-        diagnostics.rejectedCount = len(
-            rejected
-        )
+
+        kept = accepted_pairs[
+            :self.max_findings_per_cycle
+        ]
+        overflow = accepted_pairs[
+            self.max_findings_per_cycle:
+        ]
+
+        for score, candidate, finding in overflow:
+            rejected.append(
+                GeneralRejectedCandidate(
+                    candidate=candidate,
+                    reason="intervention_budget_exceeded",
+                    details={
+                        "score": score,
+                        "maximumFindingsPerCycle": (
+                            self.max_findings_per_cycle
+                        ),
+                        "fingerprint": finding.fingerprint,
+                    },
+                )
+            )
+
+        findings = [
+            finding
+            for _, _, finding in kept
+        ]
+
+        diagnostics.acceptedCount = len(findings)
+        diagnostics.rejectedCount = len(rejected)
+        diagnostics.budgetRejectedCount = len(overflow)
+        diagnostics.metadata = {
+            "maxFindingsPerCycle": self.max_findings_per_cycle,
+            "acceptedScores": [
+                score
+                for score, _, _ in kept
+            ],
+        }
 
         return GeneralReasoningResult(
             meetingId=context.meetingId,

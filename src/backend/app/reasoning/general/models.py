@@ -19,7 +19,6 @@ GeneralCandidateSeverity = Literal[
     "low",
     "medium",
     "high",
-    "critical",
 ]
 
 
@@ -30,6 +29,14 @@ class GeneralFindingCandidate(BaseModel):
     IMPORTANT:
     A candidate is NOT yet a Finding and must never be surfaced as an
     active DecisionOS risk before it passes FindingGate.
+
+    Signal-discipline fields:
+    - specificity: how specifically the signal is tied to this context.
+    - evidenceDirectness: how directly supplied evidence supports the
+      described signal.
+    - directlyObserved: the signal itself appears in current context.
+    - directlyNeeded: for missing-information, the missing item is an
+      immediate prerequisite for the decision currently being discussed.
     """
 
     id: str = ""
@@ -56,17 +63,27 @@ class GeneralFindingCandidate(BaseModel):
         le=1.0,
     )
 
+    specificity: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+    )
+
+    evidenceDirectness: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+    )
+
+    directlyObserved: bool = False
+    directlyNeeded: bool = False
+
     evidenceSourceIds: list[str] = Field(
         default_factory=list
     )
 
-    # Stable semantic identity used for dedupe/lifecycle identity later.
-    # It must describe the issue, not generated wording.
     noveltyKey: str
 
-    # Machine-readable seed for the existing Recommendation layer.
-    # Phase 1 stores it on Finding.attributes only; it does not yet modify
-    # RecommendationGenerator.
     suggestedAction: str = ""
 
     attributes: dict[str, Any] = Field(
@@ -88,6 +105,7 @@ class GeneralReasoningDiagnostics(BaseModel):
     candidateCount: int = 0
     acceptedCount: int = 0
     rejectedCount: int = 0
+    budgetRejectedCount: int = 0
 
     backendErrors: list[str] = Field(
         default_factory=list

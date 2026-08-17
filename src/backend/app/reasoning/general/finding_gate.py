@@ -32,7 +32,8 @@ class FindingGate:
     Deterministic authority boundary between LLM candidates and active
     DecisionOS Findings.
 
-    Phase 1 deliberately keeps the gate simple and inspectable.
+    Phase 1.1 adds signal discipline so generic domain checklists and
+    weakly grounded observations do not become live Findings.
     """
 
     TYPE_MAP = {
@@ -46,12 +47,22 @@ class FindingGate:
     def __init__(
         self,
         *,
-        min_confidence: float = 0.65,
-        min_decision_relevance: float = 0.70,
+        min_confidence: float = 0.68,
+        min_decision_relevance: float = 0.75,
+        min_specificity: float = 0.65,
+        min_evidence_directness: float = 0.60,
+        missing_information_min_relevance: float = 0.80,
+        missing_information_min_specificity: float = 0.72,
     ) -> None:
         self.min_confidence = min_confidence
-        self.min_decision_relevance = (
-            min_decision_relevance
+        self.min_decision_relevance = min_decision_relevance
+        self.min_specificity = min_specificity
+        self.min_evidence_directness = min_evidence_directness
+        self.missing_information_min_relevance = (
+            missing_information_min_relevance
+        )
+        self.missing_information_min_specificity = (
+            missing_information_min_specificity
         )
 
     def evaluate(
@@ -72,10 +83,7 @@ class FindingGate:
                 reason="missing_novelty_key",
             )
 
-        if (
-            candidate.confidence
-            < self.min_confidence
-        ):
+        if candidate.confidence < self.min_confidence:
             return FindingGateDecision(
                 accepted=False,
                 reason="low_confidence",
@@ -85,43 +93,22 @@ class FindingGate:
                 },
             )
 
-        if (
-            candidate.decisionRelevance
-            < self.min_decision_relevance
-        ):
-            return FindingGateDecision(
-                accepted=False,
-                reason="low_decision_relevance",
-                details={
-                    "decisionRelevance": (
-                        candidate.decisionRelevance
-                    ),
-                    "minimum": (
-                        self.min_decision_relevance
-                    ),
-                },
+        if candidate.type == "missing_information":
+            discipline = self._missing_information_discipline(
+                candidate
+            )
+        else:
+            discipline = self._observed_signal_discipline(
+                candidate
             )
 
-        valid_source_ids = (
-            context.valid_source_ids()
-        )
+        if discipline is not None:
+            return discipline
 
-        source_ids = list(
-            dict.fromkeys(
-                source_id
-                for source_id
-                in candidate.evidenceSourceIds
-                if source_id
-                in valid_source_ids
-            )
+        source_ids = self._validated_source_ids(
+            context,
+            candidate,
         )
-
-        if not source_ids:
-            # The current-context source is a legitimate grounding anchor,
-            # especially for missing-information candidates.
-            source_ids = [
-                context.contextSourceId
-            ] if context.contextSourceId else []
 
         if not source_ids:
             return FindingGateDecision(
@@ -142,18 +129,10 @@ class FindingGate:
             id=self._finding_id(
                 fingerprint
             ),
-            type=self.TYPE_MAP[
-                candidate.type
-            ],
+            type=self.TYPE_MAP[candidate.type],
             status="open",
-            domain=(
-                candidate.domain
-                or "general"
-            ),
-            subject=(
-                candidate.subject
-                or candidate.type
-            ),
+            domain=(candidate.domain or "general"),
+            subject=(candidate.subject or candidate.type),
             title=candidate.title.strip(),
             summary=candidate.summary.strip(),
             severity=candidate.severity,
@@ -162,25 +141,17 @@ class FindingGate:
             evidence=evidence,
             attributes={
                 "reasoningSource": "general",
-                "generalFindingType": (
-                    candidate.type
-                ),
-                "decisionRelevance": (
-                    candidate.decisionRelevance
-                ),
-                "noveltyKey": (
-                    candidate.noveltyKey
-                ),
-                "suggestedAction": (
-                    candidate.suggestedAction
-                ),
-                **dict(
-                    candidate.attributes or {}
-                ),
+                "generalFindingType": candidate.type,
+                "decisionRelevance": candidate.decisionRelevance,
+                "specificity": candidate.specificity,
+                "evidenceDirectness": candidate.evidenceDirectness,
+                "directlyObserved": candidate.directlyObserved,
+                "directlyNeeded": candidate.directlyNeeded,
+                "noveltyKey": candidate.noveltyKey,
+                "suggestedAction": candidate.suggestedAction,
+                **dict(candidate.attributes or {}),
             },
-            reasonCode=(
-                f"general:{candidate.type}"
-            ),
+            reasonCode=f"general:{candidate.type}",
             fingerprint=fingerprint,
         )
 
@@ -190,8 +161,144 @@ class FindingGate:
             reason="accepted",
             details={
                 "validatedSourceIds": source_ids,
+                "interventionScore": self.intervention_score(
+                    candidate
+                ),
             },
         )
+
+    def _observed_signal_discipline(
+        self,
+        candidate: GeneralFindingCandidate,
+    ) -> FindingGateDecision | None:
+
+        if candidate.decisionRelevance < self.min_decision_relevance:
+            return FindingGateDecision(
+                accepted=False,
+                reason="low_decision_relevance",
+                details={
+                    "decisionRelevance": candidate.decisionRelevance,
+                    "minimum": self.min_decision_relevance,
+                },
+            )
+
+        if candidate.specificity < self.min_specificity:
+            return FindingGateDecision(
+                accepted=False,
+                reason="low_specificity",
+                details={
+                    "specificity": candidate.specificity,
+                    "minimum": self.min_specificity,
+                },
+            )
+
+        if not candidate.directlyObserved:
+            return FindingGateDecision(
+                accepted=False,
+                reason="not_directly_observed",
+            )
+
+        if candidate.evidenceDirectness < self.min_evidence_directness:
+            return FindingGateDecision(
+                accepted=False,
+                reason="low_evidence_directness",
+                details={
+                    "evidenceDirectness": candidate.evidenceDirectness,
+                    "minimum": self.min_evidence_directness,
+                },
+            )
+
+        return None
+
+    def _missing_information_discipline(
+        self,
+        candidate: GeneralFindingCandidate,
+    ) -> FindingGateDecision | None:
+
+        if not candidate.directlyNeeded:
+            return FindingGateDecision(
+                accepted=False,
+                reason="generic_missing_information",
+                details={
+                    "directlyNeeded": False,
+                },
+            )
+
+        if (
+            candidate.decisionRelevance
+            < self.missing_information_min_relevance
+        ):
+            return FindingGateDecision(
+                accepted=False,
+                reason="low_decision_relevance",
+                details={
+                    "decisionRelevance": candidate.decisionRelevance,
+                    "minimum": self.missing_information_min_relevance,
+                },
+            )
+
+        if (
+            candidate.specificity
+            < self.missing_information_min_specificity
+        ):
+            return FindingGateDecision(
+                accepted=False,
+                reason="low_specificity",
+                details={
+                    "specificity": candidate.specificity,
+                    "minimum": self.missing_information_min_specificity,
+                },
+            )
+
+        return None
+
+    @staticmethod
+    def intervention_score(
+        candidate: GeneralFindingCandidate,
+    ) -> float:
+        severity_weight = {
+            "low": 0.65,
+            "medium": 0.82,
+            "high": 1.0,
+        }.get(candidate.severity, 0.82)
+
+        directness = (
+            candidate.evidenceDirectness
+            if candidate.type != "missing_information"
+            else max(
+                0.70,
+                candidate.specificity,
+            )
+        )
+
+        return round(
+            candidate.confidence
+            * candidate.decisionRelevance
+            * candidate.specificity
+            * directness
+            * severity_weight,
+            6,
+        )
+
+    @staticmethod
+    def _validated_source_ids(
+        context: GeneralReasoningContext,
+        candidate: GeneralFindingCandidate,
+    ) -> list[str]:
+        valid_source_ids = context.valid_source_ids()
+
+        source_ids = list(
+            dict.fromkeys(
+                source_id
+                for source_id in candidate.evidenceSourceIds
+                if source_id in valid_source_ids
+            )
+        )
+
+        if not source_ids and context.contextSourceId:
+            source_ids = [context.contextSourceId]
+
+        return source_ids
 
     @staticmethod
     def _fingerprint(
@@ -225,18 +332,13 @@ class FindingGate:
         output: list[FindingEvidence] = []
 
         for source_id in source_ids:
-            if (
-                source_id
-                == context.contextSourceId
-            ):
+            if source_id == context.contextSourceId:
                 output.append(
                     FindingEvidence(
                         sourceType="runtime",
                         sourceId=source_id,
                         title="Current conversation context",
-                        summary=(
-                            context.canonicalContext
-                        ),
+                        summary=context.canonicalContext,
                         confidence=1.0,
                         metadata={
                             "contextId": context.contextId,
@@ -245,9 +347,7 @@ class FindingGate:
                 )
                 continue
 
-            source = source_map.get(
-                source_id
-            )
+            source = source_map.get(source_id)
             if source is None:
                 continue
 
@@ -290,9 +390,7 @@ class FindingGate:
             value=source.value,
             actor=source.actor,
             confidence=source.confidence,
-            metadata=dict(
-                source.metadata or {}
-            ),
+            metadata=dict(source.metadata or {}),
         )
 
 
