@@ -86,6 +86,11 @@ class RuntimeStateReducer:
             or "unknown"
         )
 
+        role = str(
+            metadata.get("role")
+            or "unknown"
+        )
+
         canonical_field = (
             cls._canonical_field(
                 event.field
@@ -106,10 +111,7 @@ class RuntimeStateReducer:
                 or ""
             ),
 
-            "role": (
-                metadata.get("role")
-                or "unknown"
-            ),
+            "role": role,
 
             "actor": actor,
 
@@ -168,25 +170,25 @@ class RuntimeStateReducer:
         #
         # Slot identity:
         #
-        #     domain + canonicalField + actor
+        #     domain + canonicalField + actor + role
         #
         # Therefore:
         #
-        # us / discountPercent / 8
+        # us / commitment / discountPercent / 8
         #     ->
-        # us / discountPercent / 15
+        # us / commitment / discountPercent / 15
         #
         # replaces the old US position.
         #
         # But:
         #
-        # us / discountPercent / 15
+        # us / commitment / discountPercent / 15
         #
         # and
         #
-        # customer / discountPercent / 10
+        # customer / requirement / discountPercent / 10
         #
-        # coexist because they represent different parties.
+        # coexist because they represent different semantic positions.
         #
         semantic_state = dict(
             facts.get(
@@ -204,6 +206,7 @@ class RuntimeStateReducer:
             domain,
             canonical_field,
             actor,
+            role,
         )
 
         def same_slot(
@@ -224,6 +227,11 @@ class RuntimeStateReducer:
                     or "unknown"
                 )
                 == slot[2]
+                and str(
+                    current.get("role")
+                    or "unknown"
+                )
+                == slot[3]
             )
 
         #
