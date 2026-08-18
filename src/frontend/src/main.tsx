@@ -220,11 +220,11 @@ function App() {
     if (data[0]) setProjectId((current) => current || data[0].id);
   };
 
-  const loadDecisionBoard = async (targetMeetingId: string, silent = true) => {
+  const loadDecisionBoard = async (targetMeetingId: string, silent = true, force = false) => {
     if (!targetMeetingId) return;
     try {
       if (!silent) setBoardLoading(true);
-      const board = await fetchJson<DecisionBoard>(`${API}/decision-board/${targetMeetingId}`);
+      const board = await fetchJson<DecisionBoard>(`${API}/decision-board/${targetMeetingId}${force ? '/refresh' : ''}`, force ? {method:'POST'} : undefined);
       if (mountedRef.current) setDecisionBoard(board);
     } catch (error) {
       if (!silent) showError(`加载决策看板失败：${getErrorMessage(error)}`);
@@ -290,6 +290,12 @@ function App() {
       stopRecording(true);
     };
   }, []);
+
+  useEffect(()=>{
+    if(!authReady) return;
+    const target=identity?'/':'/login';
+    if(window.location.pathname!==target) window.history.replaceState({},'',target);
+  },[authReady,identity]);
 
   const seed = async () => {
     try {
@@ -401,7 +407,7 @@ function App() {
             );
             showReminderToast(payload.reminders[0]);
           }
-          if (meetingId) loadDecisionBoard(meetingId, true);
+          if (meetingId) loadDecisionBoard(meetingId, true, true);
           break;
         case 'reminder.failed':
           setStreamingReminder(null);
@@ -790,6 +796,7 @@ function App() {
         {method: 'POST'},
       );
       setReminders(data.reminders || []);
+      await loadDecisionBoard(meetingId, false, true);
       showInfo(`识别主题：${(data.topics || []).join('、') || '暂无'}`);
     } catch (error) {
       showError(getErrorMessage(error));

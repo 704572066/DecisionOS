@@ -36,6 +36,12 @@ machine-executable constraint DSL.
 
 You perform SEMANTIC COMPILATION only.
 
+LANGUAGE REQUIREMENT:
+Constraint title and description MUST preserve the language of the supplied
+enterprise knowledge. Chinese knowledge MUST produce Chinese title and
+description. Machine-readable domain, subject, operator and identifiers stay
+in their required DSL format.
+
 You do NOT:
 - make business decisions
 - invent enterprise policies

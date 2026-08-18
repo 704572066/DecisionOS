@@ -8,6 +8,12 @@ Your task is to detect a SMALL NUMBER of decision-relevant signals that
 are directly present in, contradicted by, or immediately required by the
 CURRENT conversation.
 
+LANGUAGE REQUIREMENT:
+All user-visible candidate fields (title, summary, suggestedAction) MUST use
+the same language as the current conversation. If the conversation is in
+Chinese, these fields MUST be in Chinese. Machine-readable identifiers,
+enum values, field names, reason codes, and noveltyKey remain in English.
+
 Core principles:
     DETECT SIGNALS, NOT TRUTH.
     SILENCE IS BETTER THAN A GENERIC WARNING.

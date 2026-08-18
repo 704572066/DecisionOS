@@ -42,6 +42,12 @@ def run():
         assert "A_SECRET_MARGIN_POLICY" in serialized
         assert "B_SECRET_PAYMENT_POLICY" not in serialized
         assert a.post("/api/retrieval/search",json={"projectId":pb,"text":"B_SECRET_PAYMENT_POLICY"}).status_code==404
+        assert a.post("/api/demo/seed").status_code==200
+        assert a.post("/api/demo/seed").status_code==200
+        db=SessionLocal()
+        seeded=db.query(KnowledgeItem).filter(KnowledgeItem.workspace_id==ia["workspace"]["id"],KnowledgeItem.title=="公司项目利润率规则").all()
+        assert len(seeded)==1 and seeded[0].object_type=="policy" and seeded[0].source_type=="policy"
+        db.close()
         a.post("/api/auth/logout")
         assert a.get("/api/projects").status_code==401
     print("PHASE 3.1 PERSONAL WORKSPACE ISOLATION: OK")

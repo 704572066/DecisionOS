@@ -23,13 +23,17 @@ def seed_demo(db: Session = Depends(get_db), identity: CurrentIdentity = Depends
         project = Project(workspace_id=workspace_id, name="客户A企业软件采购项目", business_goal="在保证利润率的前提下完成签约")
         db.add(project)
         db.flush()
-        rows = [
-            ("document", "历史同类客户成交复盘", "去年同类型客户初始要求降价20%，最终成交折扣为8%。", "document"),
-            ("evidence", "客户A历史付款记录", "客户A过去合同平均付款周期为90天，曾出现一次逾期。", "crm"),
-            ("evidence", "公司项目利润率规则", "软件项目目标毛利率不得低于18%；超过10%的折扣必须评估付款周期。", "policy"),
-            ("decision", "历史账期风险决策", "对付款周期超过120天的客户，必须增加担保或分阶段收款。", "decision"),
-        ]
-        for typ, title, content, source in rows:
+    rows = [
+        ("document", "历史同类客户成交复盘", "去年同类型客户初始要求降价20%，最终成交折扣为8%。", "document"),
+        ("evidence", "客户A历史付款记录", "客户A过去合同平均付款周期为90天，曾出现一次逾期。", "crm"),
+        ("policy", "公司项目利润率规则", "软件项目目标毛利率不得低于18%；超过10%的折扣必须评估付款周期。", "policy"),
+        ("decision", "历史账期风险决策", "对付款周期超过120天的客户，必须增加担保或分阶段收款。", "decision"),
+    ]
+    for typ, title, content, source in rows:
+        item = db.scalar(select(KnowledgeItem).where(KnowledgeItem.workspace_id == workspace_id, KnowledgeItem.project_id == project.id, KnowledgeItem.title == title))
+        if item:
+            item.object_type=typ; item.content=content; item.source_type=source
+        else:
             db.add(
                 KnowledgeItem(
                     workspace_id=workspace_id,
@@ -40,8 +44,8 @@ def seed_demo(db: Session = Depends(get_db), identity: CurrentIdentity = Depends
                     source_type=source,
                 )
             )
-        db.commit()
-        db.refresh(project)
+    db.commit()
+    db.refresh(project)
     return {"projectId": project.id, "message": "示例知识已导入"}
 
 
