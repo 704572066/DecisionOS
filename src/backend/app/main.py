@@ -10,6 +10,7 @@ from app.api.ai_reminder import router as ai_reminder_router
 from app.api.decision_candidates import router as decision_candidate_router
 from app.api.decision_board import router as decision_board_router
 from app.api.dialogue import router as dialogue_router
+from app.api.intervention_delivery import router as intervention_delivery_router
 from app.core.config import settings
 from app.db.session import Base, engine
 from app.observability.logging_config import configure_logging
@@ -35,6 +36,7 @@ app.include_router(audio_router)
 app.include_router(health_router)
 app.include_router(decision_board_router)
 app.include_router(dialogue_router)
+app.include_router(intervention_delivery_router)
 
 
 @app.on_event("startup")

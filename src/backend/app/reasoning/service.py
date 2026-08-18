@@ -41,6 +41,7 @@ from app.intervention.policy import (
     InterventionPolicy,
     intervention_policy,
 )
+from app.intervention.delivery import active_intervention_delivery
 from app.reasoning.snapshot_store import (
     ReasoningSnapshotStore,
     reasoning_snapshot_store,
@@ -616,6 +617,17 @@ class ReasoningService:
                 **intervention_diagnostics,
                 "highestLevel": intervention_set.highestLevel,
             }
+
+            # Delivery is downstream attention infrastructure. Failures are
+            # observable but must never invalidate the reasoning result.
+            try:
+                diagnostics.metadata["interventionDelivery"] = (
+                    await active_intervention_delivery.deliver(interventions)
+                )
+            except Exception as delivery_exc:
+                diagnostics.metadata["interventionDelivery"] = {
+                    "error": str(delivery_exc),
+                }
 
         except Exception as exc:
             # Intervention policy is presentation/attention governance.

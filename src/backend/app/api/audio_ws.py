@@ -18,6 +18,7 @@ from app.observability.runtime_metrics import runtime_metrics
 from app.services.reminder_service import realtime_reminder_coordinator
 from app.services.transcript_service import append_final_segment
 from app.runtime.service import runtime_state_service
+from app.intervention.delivery import active_intervention_delivery
 
 logger = logging.getLogger(__name__)
 streaming_reminder_tasks: set[asyncio.Task] = set()
@@ -278,6 +279,8 @@ async def meeting_audio_stream(websocket: WebSocket, meeting_id: str) -> None:
             await websocket.close(code=4400)
         return
 
+    await active_intervention_delivery.connection_opened(meeting_id, websocket)
+
     mode = str(init.get("mode") or settings.asr_provider).lower()
     language = str(init.get("language") or settings.asr_language)
     mime_type = str(init.get("mimeType") or "audio/webm")
@@ -328,6 +331,15 @@ async def meeting_audio_stream(websocket: WebSocket, meeting_id: str) -> None:
                         )
                 elif event_type == "session.ping":
                     await send_json_safe(websocket, {"type": "session.pong"})
+                elif event_type == "intervention.acknowledge":
+                    delivery = active_intervention_delivery.acknowledge(
+                        meeting_id, str(payload.get("deliveryId") or "")
+                    )
+                    await send_json_safe(websocket, {
+                        "type": "intervention.acknowledged",
+                        "deliveryId": payload.get("deliveryId"),
+                        "acknowledged": delivery is not None,
+                    })
                 elif event_type == "session.stop":
                     break
         except WebSocketDisconnect:
@@ -340,6 +352,7 @@ async def meeting_audio_stream(websocket: WebSocket, meeting_id: str) -> None:
             )
             logger.exception("Browser ASR session failed: meeting=%s", meeting_id)
         finally:
+            await active_intervention_delivery.connection_closed(meeting_id, websocket)
             runtime_metrics.websocket_closed(meeting_id)
             with suppress(RuntimeError):
                 await websocket.close()
@@ -371,6 +384,15 @@ async def meeting_audio_stream(websocket: WebSocket, meeting_id: str) -> None:
                     break
                 if payload.get("type") == "session.ping":
                     await send_json_safe(websocket, {"type": "session.pong"})
+                if payload.get("type") == "intervention.acknowledge":
+                    delivery = active_intervention_delivery.acknowledge(
+                        meeting_id, str(payload.get("deliveryId") or "")
+                    )
+                    await send_json_safe(websocket, {
+                        "type": "intervention.acknowledged",
+                        "deliveryId": payload.get("deliveryId"),
+                        "acknowledged": delivery is not None,
+                    })
 
         async def receive_asr_events() -> None:
             async for event in provider.events():
@@ -414,6 +436,7 @@ async def meeting_audio_stream(websocket: WebSocket, meeting_id: str) -> None:
             {"type": "error", "message": f"ASR 会话异常：{exc}"},
         )
     finally:
+        await active_intervention_delivery.connection_closed(meeting_id, websocket)
         runtime_metrics.websocket_closed(meeting_id)
         for task in (browser_task, provider_task):
             if task and not task.done():

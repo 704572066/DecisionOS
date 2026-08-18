@@ -18,6 +18,14 @@ type Reminder = {
   relevanceScore: number;
   confidence?: number;
 };
+type ActiveIntervention = {
+  id: string;
+  title: string;
+  message: string;
+  severity: string;
+  urgency: string;
+  score: number;
+};
 type DecisionCandidate = {
   candidateId: string; projectId: string; meetingId: string; contextId: string;
   title: string; summary: string; statement: string; reasons: string[]; risks: string[];
@@ -387,6 +395,31 @@ function App() {
             }).slice(0, 5);
           });
           showInfo(`发现 ${payload.reminders.length} 条历史提醒`);
+          break;
+        case 'intervention.delivered': {
+          const intervention = payload.intervention as ActiveIntervention;
+          const reminder: Reminder = {
+            type: 'risk',
+            title: intervention.title,
+            summary: intervention.message,
+            suggestion: intervention.message,
+            reason: `主动介入 · ${intervention.urgency}`,
+            source: {type: 'intervention', id: intervention.id},
+            relevanceScore: intervention.score,
+          };
+          setReminders((current) => [reminder, ...current].slice(0, 5));
+          showReminderToast(reminder);
+          if (socketRef.current?.readyState === WebSocket.OPEN) {
+            socketRef.current.send(JSON.stringify({
+              type: 'intervention.acknowledge',
+              deliveryId: payload.deliveryId,
+            }));
+          }
+          if (meetingId) loadDecisionBoard(meetingId, true);
+          break;
+        }
+        case 'intervention.acknowledged':
+          if (!payload.acknowledged) showError('主动提醒确认失败或已过期');
           break;
         case 'error':
           setConnectionState('error');
