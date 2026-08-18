@@ -130,6 +130,8 @@ function App() {
   const [authEmail,setAuthEmail]=useState('');
   const [authPassword,setAuthPassword]=useState('');
   const [authUsername,setAuthUsername]=useState('');
+  const [authMessage,setAuthMessage]=useState('');
+  const [authMessageType,setAuthMessageType]=useState<'info'|'error'>('info');
   const storedSession = useMemo(() => loadStoredSession(), []);
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState(storedSession?.projectId || '');
@@ -314,8 +316,8 @@ function App() {
   const submitAuth=async()=>{
     try{
       const data=await fetchJson<Identity>(`${API}/auth/${authMode}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:authEmail,password:authPassword,username:authUsername})});
-      setIdentity(data); setAuthReady(true); await loadProjects(); showInfo(`已进入${data.workspace.name}`);
-    }catch(error){showError(getErrorMessage(error));}
+      setAuthMessage(''); setIdentity(data); setAuthReady(true); await loadProjects(); showInfo(`已进入${data.workspace.name}`);
+    }catch(error){setAuthMessageType('error');setAuthMessage(getErrorMessage(error));}
   };
 
   const logout=async()=>{
@@ -804,7 +806,7 @@ function App() {
   };
 
   if(!authReady) return <main className="auth-shell"><p>正在加载我的空间…</p></main>;
-  if(!identity) return <main className="auth-shell"><section className="auth-card"><span className="eyebrow">Personal Workspace First</span><h1>DecisionOS</h1><p>{authMode==='login'?'登录我的空间':'创建个人空间'}</p>{authMode==='register'&&<input placeholder="称呼" value={authUsername} onChange={e=>setAuthUsername(e.target.value)}/>}<input type="email" placeholder="邮箱" value={authEmail} onChange={e=>setAuthEmail(e.target.value)}/><input type="password" placeholder="密码（至少 8 位）" value={authPassword} onChange={e=>setAuthPassword(e.target.value)}/><button onClick={submitAuth}>{authMode==='login'?'登录':'注册并创建空间'}</button><button className="link-button" onClick={()=>setAuthMode(authMode==='login'?'register':'login')}>{authMode==='login'?'没有账号？创建空间':'已有账号？登录'}</button>{message&&<p className={messageType}>{message}</p>}</section></main>;
+  if(!identity) return <main className="auth-shell"><section className="auth-card"><span className="eyebrow">Personal Workspace First</span><h1>DecisionOS</h1><p>{authMode==='login'?'登录我的空间':'创建个人空间'}</p>{authMode==='register'&&<input placeholder="称呼" value={authUsername} onChange={e=>setAuthUsername(e.target.value)}/>}<input type="email" placeholder="邮箱" value={authEmail} onChange={e=>setAuthEmail(e.target.value)}/><input type="password" placeholder="密码（至少 8 位）" value={authPassword} onChange={e=>setAuthPassword(e.target.value)}/><button onClick={submitAuth}>{authMode==='login'?'登录':'注册并创建空间'}</button><button className="link-button" onClick={()=>{setAuthMessage('');setAuthMode(authMode==='login'?'register':'login');}}>{authMode==='login'?'没有账号？创建空间':'已有账号？登录'}</button>{authMessage&&<p className={authMessageType}>{authMessage}</p>}</section></main>;
 
   return (
     <main>
@@ -1145,3 +1147,4 @@ function App() {
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode><App /></React.StrictMode>
 );
+
