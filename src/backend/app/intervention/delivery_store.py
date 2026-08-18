@@ -10,36 +10,38 @@ class InterventionDeliveryStore:
 
     def __init__(self) -> None:
         self._records: dict[str, InterventionDelivery] = {}
-        self._by_intervention: dict[tuple[str, str], str] = {}
+        self._by_intervention: dict[tuple[str, str, str], str] = {}
 
     def put(self, record: InterventionDelivery) -> InterventionDelivery:
         self._records[record.id] = record
-        self._by_intervention[(record.meetingId, record.interventionId)] = record.id
+        self._by_intervention[(record.workspaceId, record.meetingId, record.interventionId)] = record.id
         return record
 
-    def for_intervention(self, meeting_id: str, intervention_id: str) -> InterventionDelivery | None:
-        delivery_id = self._by_intervention.get((meeting_id, intervention_id))
+    def for_intervention(self, workspace_id: str, meeting_id: str, intervention_id: str) -> InterventionDelivery | None:
+        delivery_id = self._by_intervention.get((workspace_id, meeting_id, intervention_id))
         return self._records.get(delivery_id) if delivery_id else None
 
     def get(self, delivery_id: str) -> InterventionDelivery | None:
         return self._records.get(delivery_id)
 
-    def list(self, meeting_id: str) -> list[InterventionDelivery]:
-        self.expire(meeting_id)
+    def list(self, meeting_id: str, workspace_id: str = "") -> list[InterventionDelivery]:
+        self.expire(meeting_id, workspace_id)
         return sorted(
-            (item for item in self._records.values() if item.meetingId == meeting_id),
+            (item for item in self._records.values() if item.meetingId == meeting_id and (not workspace_id or item.workspaceId == workspace_id)),
             key=lambda item: item.createdAt,
             reverse=True,
         )
 
-    def pending(self, meeting_id: str) -> list[InterventionDelivery]:
-        return [item for item in self.list(meeting_id) if item.status == "pending"]
+    def pending(self, meeting_id: str, workspace_id: str = "") -> list[InterventionDelivery]:
+        return [item for item in self.list(meeting_id, workspace_id) if item.status == "pending"]
 
-    def expire(self, meeting_id: str | None = None) -> int:
+    def expire(self, meeting_id: str | None = None, workspace_id: str = "") -> int:
         now = datetime.now(timezone.utc)
         count = 0
         for item in self._records.values():
             if meeting_id is not None and item.meetingId != meeting_id:
+                continue
+            if workspace_id and item.workspaceId != workspace_id:
                 continue
             if item.status in {"pending", "delivered"} and item.expiresAt <= now:
                 item.status = "expired"
@@ -49,4 +51,3 @@ class InterventionDeliveryStore:
 
 
 intervention_delivery_store = InterventionDeliveryStore()
-

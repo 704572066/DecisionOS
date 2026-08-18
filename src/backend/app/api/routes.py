@@ -9,15 +9,18 @@ from app.models.entities import Decision, KnowledgeItem, Meeting, Project, Task
 from app.schemas.contracts import ContextBuildRequest, DecisionCreate, MeetingCreate, ProjectCreate, TranscriptAppend
 from app.services.context_service import analyze_meeting
 from app.services.transcript_service import append_final_segment, list_segments
+from app.auth.dependencies import CurrentIdentity, get_current_identity
+from app.auth.ownership import owned_meeting, owned_project
 
 router = APIRouter(prefix="/api")
 
 
 @router.post("/demo/seed")
-def seed_demo(db: Session = Depends(get_db)):
-    project = db.scalar(select(Project).where(Project.name == "客户A企业软件采购项目"))
+def seed_demo(db: Session = Depends(get_db), identity: CurrentIdentity = Depends(get_current_identity)):
+    workspace_id = identity.workspace.id
+    project = db.scalar(select(Project).where(Project.workspace_id == workspace_id, Project.name == "客户A企业软件采购项目"))
     if not project:
-        project = Project(name="客户A企业软件采购项目", business_goal="在保证利润率的前提下完成签约")
+        project = Project(workspace_id=workspace_id, name="客户A企业软件采购项目", business_goal="在保证利润率的前提下完成签约")
         db.add(project)
         db.flush()
         rows = [
@@ -29,6 +32,7 @@ def seed_demo(db: Session = Depends(get_db)):
         for typ, title, content, source in rows:
             db.add(
                 KnowledgeItem(
+                    workspace_id=workspace_id,
                     project_id=project.id,
                     object_type=typ,
                     title=title,
@@ -42,16 +46,16 @@ def seed_demo(db: Session = Depends(get_db)):
 
 
 @router.get("/projects")
-def list_projects(db: Session = Depends(get_db)):
+def list_projects(db: Session = Depends(get_db), identity: CurrentIdentity = Depends(get_current_identity)):
     return [
         {"id": p.id, "name": p.name, "businessGoal": p.business_goal}
-        for p in db.scalars(select(Project)).all()
+        for p in db.scalars(select(Project).where(Project.workspace_id == identity.workspace.id)).all()
     ]
 
 
 @router.post("/projects")
-def create_project(body: ProjectCreate, db: Session = Depends(get_db)):
-    p = Project(name=body.name, business_goal=body.businessGoal)
+def create_project(body: ProjectCreate, db: Session = Depends(get_db), identity: CurrentIdentity = Depends(get_current_identity)):
+    p = Project(workspace_id=identity.workspace.id, name=body.name, business_goal=body.businessGoal)
     db.add(p)
     db.commit()
     db.refresh(p)
@@ -59,10 +63,9 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/meetings")
-def create_meeting(body: MeetingCreate, db: Session = Depends(get_db)):
-    if not db.get(Project, body.projectId):
-        raise HTTPException(404, "Project not found")
-    m = Meeting(project_id=body.projectId, title=body.title)
+def create_meeting(body: MeetingCreate, db: Session = Depends(get_db), identity: CurrentIdentity = Depends(get_current_identity)):
+    owned_project(db, identity.workspace.id, body.projectId)
+    m = Meeting(workspace_id=identity.workspace.id, project_id=body.projectId, title=body.title)
     db.add(m)
     db.commit()
     db.refresh(m)
@@ -70,11 +73,9 @@ def create_meeting(body: MeetingCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/meetings/{meeting_id}")
-def get_meeting(meeting_id: str, db: Session = Depends(get_db)):
-    m = db.get(Meeting, meeting_id)
-    if not m:
-        raise HTTPException(404, "Meeting not found")
-    segments = list_segments(db, meeting_id)
+def get_meeting(meeting_id: str, db: Session = Depends(get_db), identity: CurrentIdentity = Depends(get_current_identity)):
+    m = owned_meeting(db, identity.workspace.id, meeting_id)
+    segments = list_segments(db, meeting_id, workspace_id=identity.workspace.id)
     return {
         "id": m.id,
         "projectId": m.project_id,
@@ -97,10 +98,8 @@ def get_meeting(meeting_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/meetings/{meeting_id}/transcript")
-def append_transcript(meeting_id: str, body: TranscriptAppend, db: Session = Depends(get_db)):
-    m = db.get(Meeting, meeting_id)
-    if not m:
-        raise HTTPException(404, "Meeting not found")
+def append_transcript(meeting_id: str, body: TranscriptAppend, db: Session = Depends(get_db), identity: CurrentIdentity = Depends(get_current_identity)):
+    m = owned_meeting(db, identity.workspace.id, meeting_id)
     # segment = append_final_segment(db, meeting=m, text=body.text, provider="manual")
     # return {"id": m.id, "transcript": m.transcript, "segmentId": segment.id}
     result = append_final_segment(
@@ -120,39 +119,36 @@ def append_transcript(meeting_id: str, body: TranscriptAppend, db: Session = Dep
 
 
 @router.post("/meetings/{meeting_id}/analyze")
-def analyze(meeting_id: str, db: Session = Depends(get_db)):
-    m = db.get(Meeting, meeting_id)
-    if not m:
-        raise HTTPException(404, "Meeting not found")
+def analyze(meeting_id: str, db: Session = Depends(get_db), identity: CurrentIdentity = Depends(get_current_identity)):
+    m = owned_meeting(db, identity.workspace.id, meeting_id)
     return analyze_meeting(db, m)
 
 
 @router.get("/meetings/{meeting_id}/context")
-def get_meeting_context(meeting_id: str, maxCharacters: int = 1600, db: Session = Depends(get_db)):
-    meeting = db.get(Meeting, meeting_id)
-    if not meeting:
-        raise HTTPException(404, "Meeting not found")
+def get_meeting_context(meeting_id: str, maxCharacters: int = 1600, db: Session = Depends(get_db), identity: CurrentIdentity = Depends(get_current_identity)):
+    meeting = owned_meeting(db, identity.workspace.id, meeting_id)
     return build_meeting_context(db, meeting, max_characters=max(200, min(maxCharacters, 12000))).model_dump(mode="json")
 
 @router.post("/context/build")
-def build_context(body: ContextBuildRequest, db: Session = Depends(get_db)):
-    project = db.get(Project, body.projectId)
-    if not project:
-        raise HTTPException(404, "Project not found")
+def build_context(body: ContextBuildRequest, db: Session = Depends(get_db), identity: CurrentIdentity = Depends(get_current_identity)):
+    project = owned_project(db, identity.workspace.id, body.projectId)
     transcript = body.transcript
     if body.meetingId:
-        meeting = db.get(Meeting, body.meetingId)
-        if not meeting:
-            raise HTTPException(404, "Meeting not found")
+        meeting = owned_meeting(db, identity.workspace.id, body.meetingId)
         if meeting.project_id != body.projectId:
             raise HTTPException(400, "Meeting does not belong to project")
         if not transcript:
             transcript = meeting.transcript or ""
-    return context_builder.build(db, project_id=body.projectId, meeting_id=body.meetingId, transcript=transcript, objective=body.objective, max_characters=body.maxCharacters).model_dump(mode="json")
+    return context_builder.build(db, workspace_id=identity.workspace.id, project_id=body.projectId, meeting_id=body.meetingId, transcript=transcript, objective=body.objective, max_characters=body.maxCharacters).model_dump(mode="json")
 
 @router.post("/decisions")
-def create_decision(body: DecisionCreate, db: Session = Depends(get_db)):
+def create_decision(body: DecisionCreate, db: Session = Depends(get_db), identity: CurrentIdentity = Depends(get_current_identity)):
+    owned_project(db, identity.workspace.id, body.projectId)
+    if body.meetingId:
+        meeting = owned_meeting(db, identity.workspace.id, body.meetingId)
+        if meeting.project_id != body.projectId: raise HTTPException(400, "Meeting does not belong to project")
     d = Decision(
+        workspace_id=identity.workspace.id,
         project_id=body.projectId,
         meeting_id=body.meetingId,
         title=body.title,
@@ -163,6 +159,7 @@ def create_decision(body: DecisionCreate, db: Session = Depends(get_db)):
     db.flush()
     db.add(
         KnowledgeItem(
+            workspace_id=identity.workspace.id,
             project_id=body.projectId,
             object_type="decision",
             title=body.title,
@@ -174,6 +171,7 @@ def create_decision(body: DecisionCreate, db: Session = Depends(get_db)):
     task = None
     if body.taskTitle and body.taskObjective:
         task = Task(
+            workspace_id=identity.workspace.id,
             project_id=body.projectId,
             decision_id=d.id,
             title=body.taskTitle,

@@ -9,6 +9,8 @@ from app.retrieval.models import RetrievalQuery
 from app.retrieval.query_builder import build_retrieval_query
 from app.retrieval.service import hybrid_retriever
 from app.retrieval.vector_store import coverage
+from app.auth.dependencies import CurrentIdentity,get_current_identity
+from app.auth.ownership import owned_meeting,owned_project
 
 router = APIRouter(prefix="/api/retrieval", tags=["retrieval"])
 
@@ -21,10 +23,10 @@ class SearchBody(BaseModel):
     topK: int = Field(default=8, ge=1, le=50)
 
 @router.post("/search")
-async def search(body: SearchBody, db: Session = Depends(get_db)):
-    if not db.get(Project, body.projectId):
-        raise HTTPException(404, "Project not found")
+async def search(body: SearchBody, db: Session = Depends(get_db), identity: CurrentIdentity=Depends(get_current_identity)):
+    owned_project(db,identity.workspace.id,body.projectId)
     query = RetrievalQuery(
+        workspace_id=identity.workspace.id,
         project_id=body.projectId,
         text=body.text,
         topics=body.topics,
@@ -35,10 +37,8 @@ async def search(body: SearchBody, db: Session = Depends(get_db)):
     return await hybrid_retriever.search(db, query)
 
 @router.get("/meetings/{meeting_id}")
-async def search_meeting(meeting_id: str, topK: int = 8, db: Session = Depends(get_db)):
-    meeting = db.get(Meeting, meeting_id)
-    if not meeting:
-        raise HTTPException(404, "Meeting not found")
+async def search_meeting(meeting_id: str, topK: int = 8, db: Session = Depends(get_db), identity: CurrentIdentity=Depends(get_current_identity)):
+    meeting = owned_meeting(db,identity.workspace.id,meeting_id)
     context = build_meeting_context(db, meeting)
     result = await hybrid_retriever.search(
         db,
@@ -49,5 +49,6 @@ async def search_meeting(meeting_id: str, topK: int = 8, db: Session = Depends(g
     return result
 
 @router.get("/coverage")
-def get_coverage(projectId: str | None = None, db: Session = Depends(get_db)):
-    return coverage(db, projectId)
+def get_coverage(projectId: str | None = None, db: Session = Depends(get_db), identity: CurrentIdentity=Depends(get_current_identity)):
+    if projectId: owned_project(db,identity.workspace.id,projectId)
+    return coverage(db, identity.workspace.id, projectId)

@@ -13,8 +13,8 @@ class ContextBuilder:
         self.max_references=max_references
     def build_for_meeting(self,db:Session,meeting:Meeting,objective="",max_characters=None):
         project=db.get(Project,meeting.project_id)
-        return self.build(db,project_id=meeting.project_id,meeting_id=meeting.id,transcript=meeting.transcript or "",objective=objective or (project.business_goal if project else ""),max_characters=max_characters)
-    def build(self,db:Session,*,project_id,transcript,meeting_id=None,objective="",max_characters=None):
+        return self.build(db,workspace_id=meeting.workspace_id,project_id=meeting.project_id,meeting_id=meeting.id,transcript=meeting.transcript or "",objective=objective or (project.business_goal if project else ""),max_characters=max_characters)
+    def build(self,db:Session,*,workspace_id,project_id,transcript,meeting_id=None,objective="",max_characters=None):
         project=db.get(Project,project_id)
         raw_full=normalize(transcript)
         raw_window=recent_window(raw_full,max_characters or self.default_max_characters)
@@ -25,9 +25,9 @@ class ContextBuilder:
         entity_values=entities(clean_window)
         constraint_values=constraints(clean_window)
         keyword_values=keywords(clean_window,topic_values,fact_values)
-        refs=self._refs(db,project_id,topic_values,keyword_values)
+        refs=self._refs(db,workspace_id,project_id,topic_values,keyword_values)
         return BusinessContext(
-            contextId="context-"+uuid4().hex[:16],
+            contextId="context-"+uuid4().hex[:16],workspaceId=workspace_id,
             projectId=project_id,meetingId=meeting_id,
             intent=self._intent(topic_values,objective),
             currentObjective=objective or (project.business_goal if project else ""),
@@ -42,10 +42,10 @@ class ContextBuilder:
                 cleaning=TranscriptCleaningMetadata(**cleaning.metadata()),
             ),
         )
-    def _refs(self,db,project_id,topics_value,keywords_value):
+    def _refs(self,db,workspace_id,project_id,topics_value,keywords_value):
         signals=[*topics_value,*keywords_value[:12]]
         scored=[]
-        for item in db.scalars(select(KnowledgeItem).where(KnowledgeItem.project_id==project_id)).all():
+        for item in db.scalars(select(KnowledgeItem).where(KnowledgeItem.workspace_id==workspace_id,KnowledgeItem.project_id==project_id)).all():
             searchable=(item.title+"\n"+item.content).lower()
             hits=sum(1 for x in signals if x and x.lower() in searchable)
             if hits: scored.append((min(1,.35+hits*.1),item))

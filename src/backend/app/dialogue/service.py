@@ -68,12 +68,13 @@ class DialogueService:
         )
 
         history = self.store.list(
-            meeting.id
+            meeting.id, meeting.workspace_id
         )
 
         conversation_id = (
             self.store.conversation_id(
                 meeting.id
+                , meeting.workspace_id
             )
         )
 
@@ -91,7 +92,7 @@ class DialogueService:
             DialogueTurn(
                 role="user",
                 content=request.text,
-            ),
+            ), meeting.workspace_id,
         )
 
         self.store.append(
@@ -99,7 +100,7 @@ class DialogueService:
             DialogueTurn(
                 role="assistant",
                 content=response.answer,
-            ),
+            ), meeting.workspace_id,
         )
 
         return response
@@ -110,7 +111,7 @@ class DialogueService:
     ) -> None:
 
         self.store.clear(
-            meeting.id
+            meeting.id, meeting.workspace_id
         )
 
 

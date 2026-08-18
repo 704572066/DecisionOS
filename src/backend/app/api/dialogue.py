@@ -11,6 +11,8 @@ from app.dialogue import (
     dialogue_service,
 )
 from app.models.entities import Meeting
+from app.auth.dependencies import CurrentIdentity,get_current_identity
+from app.auth.ownership import owned_meeting
 
 
 router = APIRouter(
@@ -21,13 +23,11 @@ router = APIRouter(
 
 def meeting_or_404(
     db: Session,
+    workspace_id: str,
     meeting_id: str,
 ) -> Meeting:
 
-    meeting = db.get(
-        Meeting,
-        meeting_id,
-    )
+    meeting = owned_meeting(db, workspace_id, meeting_id)
 
     if meeting is None:
         raise HTTPException(
@@ -43,9 +43,11 @@ async def ask_dialogue(
     meeting_id: str,
     request: DialogueRequest,
     db: Session = Depends(get_db),
+    identity: CurrentIdentity = Depends(get_current_identity),
 ):
     meeting = meeting_or_404(
         db,
+        identity.workspace.id,
         meeting_id,
     )
 
@@ -73,9 +75,11 @@ async def ask_dialogue(
 async def reset_dialogue(
     meeting_id: str,
     db: Session = Depends(get_db),
+    identity: CurrentIdentity = Depends(get_current_identity),
 ):
     meeting = meeting_or_404(
         db,
+        identity.workspace.id,
         meeting_id,
     )
 

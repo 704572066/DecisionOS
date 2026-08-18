@@ -11,6 +11,7 @@ DeliveryStatus = Literal["pending", "delivered", "acknowledged", "expired"]
 
 class InterventionDelivery(BaseModel):
     id: str
+    workspaceId: str = ""
     meetingId: str
     interventionId: str
     fingerprint: str = ""
@@ -23,4 +24,3 @@ class InterventionDelivery(BaseModel):
     expiredAt: datetime | None = None
     attemptCount: int = 0
     lastError: str = ""
-

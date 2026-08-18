@@ -12,7 +12,7 @@ class HybridRetriever:
         if embedding_provider.enabled and query.text.strip():
             try:
                 vs=time.perf_counter(); e=await embedding_provider.embed_one(query.text)
-                if e: vec=vector_search(db,query.project_id,e.vector,max(30,query.top_k*4))
+                if e: vec=vector_search(db,query.workspace_id,query.project_id,e.vector,max(30,query.top_k*4))
                 vms=(time.perf_counter()-vs)*1000
             except Exception as exc:
                 error=str(exc); logger.exception("vector retrieval failed")

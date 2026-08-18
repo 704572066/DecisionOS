@@ -37,10 +37,11 @@ class DialogueStore:
     def conversation_id(
         self,
         meeting_id: str,
+        workspace_id: str = "",
     ) -> str:
 
         current = self._conversation_ids.get(
-            meeting_id
+            (workspace_id, meeting_id)
         )
 
         if current:
@@ -51,7 +52,7 @@ class DialogueStore:
         )
 
         self._conversation_ids[
-            meeting_id
+            (workspace_id, meeting_id)
         ] = current
 
         return current
@@ -59,11 +60,12 @@ class DialogueStore:
     def list(
         self,
         meeting_id: str,
+        workspace_id: str = "",
     ) -> list[DialogueTurn]:
 
         return list(
             self._turns.get(
-                meeting_id,
+                (workspace_id, meeting_id),
                 []
             )
         )
@@ -72,10 +74,11 @@ class DialogueStore:
         self,
         meeting_id: str,
         turn: DialogueTurn,
+        workspace_id: str = "",
     ) -> None:
 
         turns = self._turns[
-            meeting_id
+            (workspace_id, meeting_id)
         ]
 
         turns.append(
@@ -84,7 +87,7 @@ class DialogueStore:
 
         if len(turns) > self.max_turns:
             self._turns[
-                meeting_id
+                (workspace_id, meeting_id)
             ] = turns[
                 -self.max_turns:
             ]
@@ -92,15 +95,16 @@ class DialogueStore:
     def clear(
         self,
         meeting_id: str,
+        workspace_id: str = "",
     ) -> None:
 
         self._turns.pop(
-            meeting_id,
+            (workspace_id, meeting_id),
             None,
         )
 
         self._conversation_ids.pop(
-            meeting_id,
+            (workspace_id, meeting_id),
             None,
         )
 

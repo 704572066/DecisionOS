@@ -24,6 +24,7 @@ class InterventionDecision(BaseModel):
     """Deterministic decision about whether a Finding deserves interruption."""
 
     id: str
+    workspaceId: str = ""
     meetingId: str = ""
     contextId: str = ""
 

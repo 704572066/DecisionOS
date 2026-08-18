@@ -34,6 +34,11 @@ class Settings(BaseSettings):
 
     reminder_min_chars: int = 30
     reminder_cooldown_seconds: int = 3
+    auth_cookie_name: str = "decisionos_session"
+    auth_session_days: int = 30
+    auth_cookie_secure: bool = False
+    bootstrap_user_email: str = ""
+    bootstrap_user_password: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

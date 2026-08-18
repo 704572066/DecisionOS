@@ -221,6 +221,7 @@ class InterventionPolicy:
                 state.meetingId,
                 fingerprint,
             ),
+            workspaceId=state.workspaceId,
             meetingId=state.meetingId,
             contextId=state.contextId,
             findingId=finding.id,

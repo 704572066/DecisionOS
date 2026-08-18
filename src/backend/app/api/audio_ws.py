@@ -19,6 +19,8 @@ from app.services.reminder_service import realtime_reminder_coordinator
 from app.services.transcript_service import append_final_segment
 from app.runtime.service import runtime_state_service
 from app.intervention.delivery import active_intervention_delivery
+from app.auth.sessions import resolve_session
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 streaming_reminder_tasks: set[asyncio.Task] = set()
@@ -260,10 +262,17 @@ async def meeting_audio_stream(websocket: WebSocket, meeting_id: str) -> None:
 
     db = SessionLocal()
     try:
-        meeting = db.get(Meeting, meeting_id)
+        user = resolve_session(db, websocket.cookies.get(settings.auth_cookie_name))
+        meeting = db.get(Meeting, meeting_id) if user else None
+        if meeting is not None and meeting.workspace_id != user.workspace_id:
+            meeting = None
     finally:
         db.close()
 
+    if user is None:
+        await send_json_safe(websocket,{"type":"error","message":"Authentication required"})
+        with suppress(RuntimeError): await websocket.close(code=4401)
+        return
     if meeting is None:
         await send_json_safe(
             websocket,
@@ -279,7 +288,8 @@ async def meeting_audio_stream(websocket: WebSocket, meeting_id: str) -> None:
             await websocket.close(code=4400)
         return
 
-    await active_intervention_delivery.connection_opened(meeting_id, websocket)
+    workspace_id = user.workspace_id
+    await active_intervention_delivery.connection_opened(workspace_id, meeting_id, websocket)
 
     mode = str(init.get("mode") or settings.asr_provider).lower()
     language = str(init.get("language") or settings.asr_language)
@@ -333,7 +343,7 @@ async def meeting_audio_stream(websocket: WebSocket, meeting_id: str) -> None:
                     await send_json_safe(websocket, {"type": "session.pong"})
                 elif event_type == "intervention.acknowledge":
                     delivery = active_intervention_delivery.acknowledge(
-                        meeting_id, str(payload.get("deliveryId") or "")
+                        workspace_id, meeting_id, str(payload.get("deliveryId") or "")
                     )
                     await send_json_safe(websocket, {
                         "type": "intervention.acknowledged",
@@ -352,7 +362,7 @@ async def meeting_audio_stream(websocket: WebSocket, meeting_id: str) -> None:
             )
             logger.exception("Browser ASR session failed: meeting=%s", meeting_id)
         finally:
-            await active_intervention_delivery.connection_closed(meeting_id, websocket)
+            await active_intervention_delivery.connection_closed(workspace_id, meeting_id, websocket)
             runtime_metrics.websocket_closed(meeting_id)
             with suppress(RuntimeError):
                 await websocket.close()
@@ -386,7 +396,7 @@ async def meeting_audio_stream(websocket: WebSocket, meeting_id: str) -> None:
                     await send_json_safe(websocket, {"type": "session.pong"})
                 if payload.get("type") == "intervention.acknowledge":
                     delivery = active_intervention_delivery.acknowledge(
-                        meeting_id, str(payload.get("deliveryId") or "")
+                        workspace_id, meeting_id, str(payload.get("deliveryId") or "")
                     )
                     await send_json_safe(websocket, {
                         "type": "intervention.acknowledged",
@@ -436,7 +446,7 @@ async def meeting_audio_stream(websocket: WebSocket, meeting_id: str) -> None:
             {"type": "error", "message": f"ASR 会话异常：{exc}"},
         )
     finally:
-        await active_intervention_delivery.connection_closed(meeting_id, websocket)
+        await active_intervention_delivery.connection_closed(workspace_id, meeting_id, websocket)
         runtime_metrics.websocket_closed(meeting_id)
         for task in (browser_task, provider_task):
             if task and not task.done():

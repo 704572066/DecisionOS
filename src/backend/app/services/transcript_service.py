@@ -115,6 +115,7 @@ def append_final_segment(
         )
     )
     segment = MeetingTranscriptSegment(
+        workspace_id=meeting.workspace_id,
         meeting_id=meeting.id,
         sequence=(last_sequence or 0) + 1,
         speaker=speaker,
@@ -133,11 +134,11 @@ def append_final_segment(
     return TranscriptAppendResult(segment=segment, created=True)
 
 
-def list_segments(db: Session, meeting_id: str) -> list[MeetingTranscriptSegment]:
+def list_segments(db: Session, meeting_id: str, workspace_id: str | None = None) -> list[MeetingTranscriptSegment]:
     return list(
         db.scalars(
             select(MeetingTranscriptSegment)
-            .where(MeetingTranscriptSegment.meeting_id == meeting_id)
+            .where(MeetingTranscriptSegment.meeting_id == meeting_id, *([MeetingTranscriptSegment.workspace_id == workspace_id] if workspace_id else []))
             .order_by(MeetingTranscriptSegment.sequence.asc())
         ).all()
     )

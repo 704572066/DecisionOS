@@ -14,7 +14,7 @@ def keyword_search(db,query,limit=30):
     for x in query.entities: weights[x]+=3.5
     for x in TOKEN.findall(query.text): weights[x]+=1
     out=[]
-    for i in db.scalars(select(KnowledgeItem).where(KnowledgeItem.project_id==query.project_id)).all():
+    for i in db.scalars(select(KnowledgeItem).where(KnowledgeItem.workspace_id==query.workspace_id,KnowledgeItem.project_id==query.project_id)).all():
         title=(i.title or "").lower(); content=(i.content or "").lower(); score=0; matched=[]
         for term,weight in weights.items():
             t=term.lower(); th=title.count(t); ch=content.count(t)

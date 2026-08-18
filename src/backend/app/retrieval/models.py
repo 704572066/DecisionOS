@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 
 @dataclass(slots=True)
 class RetrievalQuery:
+    workspace_id: str
     project_id: str
     text: str
     topics: list[str] = field(default_factory=list)

@@ -8,6 +8,7 @@ logger = logging.getLogger("decisionos.retrieval.indexer")
 
 async def backfill_embeddings(
     db,
+    workspace_id,
     project_id=None,
     batch_size=16,
     force=False,
@@ -19,7 +20,7 @@ async def backfill_embeddings(
             "processed": 0,
         }
 
-    stmt = select(KnowledgeItem)
+    stmt = select(KnowledgeItem).where(KnowledgeItem.workspace_id == workspace_id)
 
     if project_id:
         stmt = stmt.where(
@@ -53,12 +54,13 @@ async def backfill_embeddings(
                     SET embedding=CAST(:embedding AS vector),
                         embedding_model=:model,
                         embedded_at=NOW()
-                    WHERE id=:id
+                    WHERE id=:id AND workspace_id=:workspace_id
                     """),
                     {
                         "embedding": literal(embedded.vector),
                         "model": embedded.model,
                         "id": item.id,
+                        "workspace_id": workspace_id,
                     },
                 )
                 processed += 1

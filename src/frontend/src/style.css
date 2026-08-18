@@ -403,3 +403,4 @@ footer.error-message {
 .signal-LATER {
   border-left: 4px solid gray;
 }
+.auth-shell{min-height:100vh;display:grid;place-items:center;background:#f4f7fb;padding:24px}.auth-card{width:min(420px,100%);display:grid;gap:14px;background:#fff;padding:32px;border-radius:18px;box-shadow:0 20px 60px rgba(15,23,42,.12)}.auth-card input{padding:12px 14px;border:1px solid #d8deea;border-radius:10px;font:inherit}.auth-card button{width:100%}

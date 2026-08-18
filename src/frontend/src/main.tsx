@@ -7,6 +7,7 @@ const WS_BASE = import.meta.env.VITE_WS_BASE_URL || '';
 const SESSION_STORAGE_KEY = 'decisionos.currentMeeting.v1';
 
 type Project = {id: string; name: string; businessGoal: string};
+type Identity = {user:{id:string;email:string;username:string;status:string};workspace:{id:string;name:string}};
 type Reminder = {
   type?: string;
   title: string;
@@ -123,6 +124,12 @@ function loadStoredSession(): {meetingId: string; projectId: string} | null {
 }
 
 function App() {
+  const [identity,setIdentity]=useState<Identity|null>(null);
+  const [authReady,setAuthReady]=useState(false);
+  const [authMode,setAuthMode]=useState<'login'|'register'>('login');
+  const [authEmail,setAuthEmail]=useState('');
+  const [authPassword,setAuthPassword]=useState('');
+  const [authUsername,setAuthUsername]=useState('');
   const storedSession = useMemo(() => loadStoredSession(), []);
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState(storedSession?.projectId || '');
@@ -191,7 +198,7 @@ function App() {
     input: RequestInfo | URL,
     init?: RequestInit,
   ): Promise<T> => {
-    const response = await fetch(input, init);
+    const response = await fetch(input, {...init, credentials:'include'});
     if (!response.ok) {
       const detail = await response.text();
       throw new Error(detail || `请求失败：HTTP ${response.status}`);
@@ -264,13 +271,16 @@ function App() {
     mountedRef.current = true;
     const initialize = async () => {
       try {
+        const me=await fetchJson<Identity>(`${API}/auth/me`);
+        setIdentity(me);
         await loadProjects();
         if (storedSession?.meetingId) {
           await restoreMeeting(storedSession.meetingId);
         }
       } catch (error) {
         localStorage.removeItem(SESSION_STORAGE_KEY);
-        showError(`初始化失败：${getErrorMessage(error)}`);
+      } finally {
+        setAuthReady(true);
       }
     };
     initialize();
@@ -292,6 +302,20 @@ function App() {
       showInfo(data.message);
     } catch (error) {
       showError(getErrorMessage(error));
+    }
+  };
+
+  const submitAuth=async()=>{
+    try{
+      const data=await fetchJson<Identity>(`${API}/auth/${authMode}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:authEmail,password:authPassword,username:authUsername})});
+      setIdentity(data); setAuthReady(true); await loadProjects(); showInfo(`已进入${data.workspace.name}`);
+    }catch(error){showError(getErrorMessage(error));}
+  };
+
+  const logout=async()=>{
+    stopRecording(true);
+    try{await fetch(`${API}/auth/logout`,{method:'POST',credentials:'include'});}finally{
+      localStorage.removeItem(SESSION_STORAGE_KEY); setIdentity(null); setProjects([]); setProjectId(''); setMeetingId(''); setDecisionBoard(null); setReminders([]);
     }
   };
 
@@ -772,6 +796,9 @@ function App() {
     }
   };
 
+  if(!authReady) return <main className="auth-shell"><p>正在加载我的空间…</p></main>;
+  if(!identity) return <main className="auth-shell"><section className="auth-card"><span className="eyebrow">Personal Workspace First</span><h1>DecisionOS</h1><p>{authMode==='login'?'登录我的空间':'创建个人空间'}</p>{authMode==='register'&&<input placeholder="称呼" value={authUsername} onChange={e=>setAuthUsername(e.target.value)}/>}<input type="email" placeholder="邮箱" value={authEmail} onChange={e=>setAuthEmail(e.target.value)}/><input type="password" placeholder="密码（至少 8 位）" value={authPassword} onChange={e=>setAuthPassword(e.target.value)}/><button onClick={submitAuth}>{authMode==='login'?'登录':'注册并创建空间'}</button><button className="link-button" onClick={()=>setAuthMode(authMode==='login'?'register':'login')}>{authMode==='login'?'没有账号？创建空间':'已有账号？登录'}</button>{message&&<p className={messageType}>{message}</p>}</section></main>;
+
   return (
     <main>
       <header className="hero">
@@ -790,6 +817,7 @@ function App() {
                 ? '连接已断开'
                 : '待机'}
         </div>
+        <div><small>{identity.workspace.name}</small><button className="link-button" onClick={logout}>退出</button></div>
       </header>
 
       <section className="setup">

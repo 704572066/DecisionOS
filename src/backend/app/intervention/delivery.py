@@ -15,25 +15,25 @@ logger = logging.getLogger(__name__)
 
 class MeetingConnectionHub:
     def __init__(self) -> None:
-        self._connections: dict[str, set[Any]] = {}
+        self._connections: dict[tuple[str, str], set[Any]] = {}
         self._lock = asyncio.Lock()
 
-    async def connect(self, meeting_id: str, websocket: Any) -> None:
+    async def connect(self, workspace_id: str, meeting_id: str, websocket: Any) -> None:
         async with self._lock:
-            self._connections.setdefault(meeting_id, set()).add(websocket)
+            self._connections.setdefault((workspace_id, meeting_id), set()).add(websocket)
 
-    async def disconnect(self, meeting_id: str, websocket: Any) -> None:
+    async def disconnect(self, workspace_id: str, meeting_id: str, websocket: Any) -> None:
         async with self._lock:
-            sockets = self._connections.get(meeting_id)
+            sockets = self._connections.get((workspace_id, meeting_id))
             if sockets is None:
                 return
             sockets.discard(websocket)
             if not sockets:
-                self._connections.pop(meeting_id, None)
+                self._connections.pop((workspace_id, meeting_id), None)
 
-    async def send(self, meeting_id: str, payload: dict) -> int:
+    async def send(self, workspace_id: str, meeting_id: str, payload: dict) -> int:
         async with self._lock:
-            sockets = list(self._connections.get(meeting_id, set()))
+            sockets = list(self._connections.get((workspace_id, meeting_id), set()))
         delivered = 0
         stale: list[Any] = []
         for websocket in sockets:
@@ -43,11 +43,11 @@ class MeetingConnectionHub:
             except Exception:
                 stale.append(websocket)
         for websocket in stale:
-            await self.disconnect(meeting_id, websocket)
+            await self.disconnect(workspace_id, meeting_id, websocket)
         return delivered
 
-    def connection_count(self, meeting_id: str) -> int:
-        return len(self._connections.get(meeting_id, set()))
+    def connection_count(self, workspace_id: str, meeting_id: str) -> int:
+        return len(self._connections.get((workspace_id, meeting_id), set()))
 
 
 class ActiveInterventionDeliveryService:
@@ -69,7 +69,7 @@ class ActiveInterventionDeliveryService:
             if decision.level != "interrupt":
                 continue
             diagnostics["eligibleCount"] += 1
-            existing = self.store.for_intervention(decision.meetingId, decision.id)
+            existing = self.store.for_intervention(decision.workspaceId, decision.meetingId, decision.id)
             if existing is not None:
                 diagnostics["duplicateCount"] += 1
                 continue
@@ -88,32 +88,32 @@ class ActiveInterventionDeliveryService:
                 logger.exception("Active intervention delivery failed: meeting=%s", decision.meetingId)
         return diagnostics
 
-    async def connection_opened(self, meeting_id: str, websocket: Any) -> dict:
-        await self.hub.connect(meeting_id, websocket)
+    async def connection_opened(self, workspace_id: str, meeting_id: str, websocket: Any) -> dict:
+        await self.hub.connect(workspace_id, meeting_id, websocket)
         delivered = 0
-        for record in self.store.pending(meeting_id):
+        for record in self.store.pending(meeting_id, workspace_id):
             if await self._send(record):
                 delivered += 1
         return {"pendingDeliveredCount": delivered}
 
-    async def connection_closed(self, meeting_id: str, websocket: Any) -> None:
-        await self.hub.disconnect(meeting_id, websocket)
+    async def connection_closed(self, workspace_id: str, meeting_id: str, websocket: Any) -> None:
+        await self.hub.disconnect(workspace_id, meeting_id, websocket)
 
-    def acknowledge(self, meeting_id: str, delivery_id: str) -> InterventionDelivery | None:
-        self.store.expire(meeting_id)
+    def acknowledge(self, workspace_id: str, meeting_id: str, delivery_id: str) -> InterventionDelivery | None:
+        self.store.expire(meeting_id, workspace_id)
         record = self.store.get(delivery_id)
-        if record is None or record.meetingId != meeting_id or record.status == "expired":
+        if record is None or record.workspaceId != workspace_id or record.meetingId != meeting_id or record.status == "expired":
             return None
         if record.status != "acknowledged":
             record.status = "acknowledged"
             record.acknowledgedAt = datetime.now(timezone.utc)
         return record
 
-    def diagnostics(self, meeting_id: str) -> dict:
-        records = self.store.list(meeting_id)
+    def diagnostics(self, workspace_id: str, meeting_id: str) -> dict:
+        records = self.store.list(meeting_id, workspace_id)
         return {
             "meetingId": meeting_id,
-            "connectionCount": self.hub.connection_count(meeting_id),
+            "connectionCount": self.hub.connection_count(workspace_id, meeting_id),
             "deliveryCount": len(records),
             "pendingCount": sum(x.status == "pending" for x in records),
             "deliveredCount": sum(x.status == "delivered" for x in records),
@@ -123,9 +123,10 @@ class ActiveInterventionDeliveryService:
 
     def _create(self, decision: InterventionDecision) -> InterventionDelivery:
         now = datetime.now(timezone.utc)
-        digest = sha256(f"{decision.meetingId}:{decision.id}".encode()).hexdigest()[:16]
+        digest = sha256(f"{decision.workspaceId}:{decision.meetingId}:{decision.id}".encode()).hexdigest()[:16]
         return InterventionDelivery(
             id=f"delivery-{digest}",
+            workspaceId=decision.workspaceId,
             meetingId=decision.meetingId,
             interventionId=decision.id,
             fingerprint=decision.fingerprint,
@@ -139,7 +140,7 @@ class ActiveInterventionDeliveryService:
 
     async def _send(self, record: InterventionDelivery) -> bool:
         record.attemptCount += 1
-        recipient_count = await self.hub.send(record.meetingId, record.event)
+        recipient_count = await self.hub.send(record.workspaceId, record.meetingId, record.event)
         if recipient_count == 0:
             return False
         record.status = "delivered"

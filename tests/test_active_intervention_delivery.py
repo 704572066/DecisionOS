@@ -17,6 +17,7 @@ class FakeWebSocket:
 def decision(identifier: str = "intervention-1") -> InterventionDecision:
     return InterventionDecision(
         id=identifier,
+        workspaceId="workspace-1",
         meetingId="meeting-1",
         contextId="context-1",
         findingId="finding-1",
@@ -43,12 +44,12 @@ async def run() -> None:
     assert record.status == "pending"
 
     socket = FakeWebSocket()
-    opened = await service.connection_opened("meeting-1", socket)
+    opened = await service.connection_opened("workspace-1","meeting-1", socket)
     assert opened["pendingDeliveredCount"] == 1
     assert record.status == "delivered"
     assert socket.messages[0]["type"] == "intervention.delivered"
 
-    acknowledged = service.acknowledge("meeting-1", record.id)
+    acknowledged = service.acknowledge("workspace-1","meeting-1", record.id)
     assert acknowledged is not None
     assert acknowledged.status == "acknowledged"
 
@@ -61,14 +62,14 @@ async def run() -> None:
     await expired_service.deliver([decision("intervention-expired")])
     expired = expired_store.list("meeting-1")[0]
     expired.expiresAt = datetime.now(timezone.utc) - timedelta(seconds=1)
-    assert expired_service.diagnostics("meeting-1")["expiredCount"] == 1
+    assert expired_service.diagnostics("workspace-1","meeting-1")["expiredCount"] == 1
     assert expired.status == "expired"
 
     surface = decision("intervention-surface").model_copy(update={"level": "surface"})
     ignored = await service.deliver([surface])
     assert ignored["eligibleCount"] == 0
 
-    await service.connection_closed("meeting-1", socket)
+    await service.connection_closed("workspace-1","meeting-1", socket)
     print("PHASE 2.3.2 ACTIVE INTERVENTION DELIVERY: OK")
 
 

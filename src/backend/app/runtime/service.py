@@ -28,6 +28,7 @@ class RuntimeStateService:
         retrieval = result["retrieval"]
 
         state = RuntimeState(
+            workspaceId=meeting.workspace_id,
             meetingId=meeting.id,
             projectId=meeting.project_id,
             contextId=context["contextId"],

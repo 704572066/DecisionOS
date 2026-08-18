@@ -8,6 +8,7 @@ class RuntimeState(BaseModel):
     meetingId: str
     projectId: str
     contextId: str
+    workspaceId: str = ""
     objective: str = ""
     canonicalContext: str = ""
     topics: list[str] = Field(default_factory=list)

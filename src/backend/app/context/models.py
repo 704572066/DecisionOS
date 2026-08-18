@@ -66,6 +66,7 @@ class ContextMetadata(BaseModel):
 class BusinessContext(BaseModel):
     contextId: str
     projectId: str
+    workspaceId: str = ""
     meetingId: str | None = None
     intent: str = ""
     currentObjective: str = ""
