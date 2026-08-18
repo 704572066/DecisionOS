@@ -93,6 +93,9 @@ class DecisionBoardBuilder:
                 recommendations=(
                     reasoning.recommendations
                 ),
+                interventions=(
+                    reasoning.interventions
+                ),
                 diagnostics=(
                     reasoning_diagnostics
                 ),

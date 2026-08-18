@@ -37,6 +37,10 @@ from app.reasoning.recommendation_set_evaluator import (
     RecommendationSetEvaluator,
 )
 from app.runtime.models import RuntimeState
+from app.intervention.policy import (
+    InterventionPolicy,
+    intervention_policy,
+)
 from app.reasoning.snapshot_store import (
     ReasoningSnapshotStore,
     reasoning_snapshot_store,
@@ -89,6 +93,7 @@ class ReasoningService:
         finding_merger: SharedFindingMerger | None = None,
         normative_guard: NormativeBoundaryGuard | None = None,
         recommendation_evaluator: RecommendationSetEvaluator | None = None,
+        intervention_policy_instance: InterventionPolicy | None = None,
         snapshot_store: ReasoningSnapshotStore | None = None,
     ) -> None:
         self.context_builder = (
@@ -146,6 +151,12 @@ class ReasoningService:
             recommendation_evaluator
             if recommendation_evaluator is not None
             else RecommendationSetEvaluator()
+        )
+
+        self.intervention_policy = (
+            intervention_policy_instance
+            if intervention_policy_instance is not None
+            else intervention_policy
         )
 
         self.snapshot_store = (
@@ -574,7 +585,51 @@ class ReasoningService:
 
         #
         # ------------------------------------------------------------
-        # 8. Unified ReasoningResult
+        # 8. Findings + Recommendations -> Intervention Decisions
+        # ------------------------------------------------------------
+        #
+        interventions = []
+
+        try:
+            intervention_set = self.intervention_policy.evaluate(
+                state=state,
+                findings=shared_finding_set.findings,
+                recommendations=recommendation_set.recommendations,
+            )
+
+            interventions = list(intervention_set.decisions)
+            intervention_diagnostics = dict(
+                intervention_set.diagnostics or {}
+            )
+
+            diagnostics.interventionCount = len(interventions)
+            diagnostics.interruptInterventionCount = int(
+                intervention_diagnostics.get("interruptCount", 0)
+            )
+            diagnostics.surfaceInterventionCount = int(
+                intervention_diagnostics.get("surfaceCount", 0)
+            )
+            diagnostics.silentInterventionCount = int(
+                intervention_diagnostics.get("silentCount", 0)
+            )
+            diagnostics.metadata["interventionEvaluation"] = {
+                **intervention_diagnostics,
+                "highestLevel": intervention_set.highestLevel,
+            }
+
+        except Exception as exc:
+            # Intervention policy is presentation/attention governance.
+            # It must never break the underlying reasoning result.
+            diagnostics.evaluationErrors.append(
+                f"intervention_policy: {exc}"
+            )
+            diagnostics.metadata["interventionEvaluation"] = {
+                "error": str(exc),
+            }
+
+        #
+        # ------------------------------------------------------------
+        # 9. Unified ReasoningResult
         # ------------------------------------------------------------
         #
         return ReasoningResult(
@@ -586,6 +641,7 @@ class ReasoningService:
             recommendations=(
                 recommendation_set.recommendations
             ),
+            interventions=interventions,
             diagnostics=diagnostics,
         )
 

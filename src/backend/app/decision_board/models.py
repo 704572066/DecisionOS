@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from app.reasoning.models import Finding
 from app.reasoning.context import EvaluationConstraint
 from app.reasoning.recommendation_models import Recommendation
+from app.intervention.models import InterventionDecision
 class DecisionBoardReasoning(BaseModel):
 
     findings: list[Finding] = Field(
@@ -18,6 +19,10 @@ class DecisionBoardReasoning(BaseModel):
     )
 
     recommendations: list[Recommendation] = Field(
+        default_factory=list
+    )
+
+    interventions: list[InterventionDecision] = Field(
         default_factory=list
     )
 
