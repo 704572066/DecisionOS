@@ -39,8 +39,11 @@ class Settings(BaseSettings):
     auth_cookie_secure: bool = False
     bootstrap_user_email: str = ""
     bootstrap_user_password: str = ""
+    knowledge_storage_dir: str = "./data/knowledge"
+    knowledge_max_upload_mb: int = 20
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
 settings = Settings()
+

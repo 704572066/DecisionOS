@@ -46,6 +46,10 @@ services:
       REMINDER_RETRIEVAL_TOP_K: ${REMINDER_RETRIEVAL_TOP_K:-8}
       REMINDER_EVIDENCE_TOP_K: ${REMINDER_EVIDENCE_TOP_K:-5}
       REMINDER_ENABLE_THINKING: ${REMINDER_ENABLE_THINKING:-false}
+      KNOWLEDGE_STORAGE_DIR: /app/data/knowledge
+      KNOWLEDGE_MAX_UPLOAD_MB: ${KNOWLEDGE_MAX_UPLOAD_MB:-20}
+    volumes:
+      - decisionos_knowledge:/app/data/knowledge
     expose: ["8000"]
     depends_on:
       db:
@@ -76,6 +80,8 @@ services:
 
 volumes:
   decisionos_db:
+  decisionos_knowledge:
 
 networks:
   internal:
+

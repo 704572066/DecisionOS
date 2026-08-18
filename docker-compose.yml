@@ -23,6 +23,10 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
       CORS_ORIGINS: http://localhost:5173
+      KNOWLEDGE_STORAGE_DIR: /app/data/knowledge
+      KNOWLEDGE_MAX_UPLOAD_MB: ${KNOWLEDGE_MAX_UPLOAD_MB:-20}
+    volumes:
+      - decisionos_knowledge:/app/data/knowledge
     ports:
       - "8000:8000"
     depends_on:
@@ -40,3 +44,5 @@ services:
 
 volumes:
   decisionos_db:
+  decisionos_knowledge:
+

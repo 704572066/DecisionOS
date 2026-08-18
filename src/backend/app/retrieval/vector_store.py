@@ -8,7 +8,7 @@ def vector_search(db,workspace_id,project_id,query_vector,limit=30):
 SELECT id,object_type,source_id,source_type,title,content,
 1-(embedding <=> CAST(:embedding AS vector)) similarity
 FROM knowledge_items
-WHERE workspace_id=:workspace_id AND project_id=:project_id AND embedding IS NOT NULL
+WHERE workspace_id=:workspace_id AND (project_id=:project_id OR project_id IS NULL) AND embedding IS NOT NULL
 ORDER BY embedding <=> CAST(:embedding AS vector)
 LIMIT :limit
 """),{"workspace_id":workspace_id,"project_id":project_id,"embedding":literal(query_vector),"limit":limit}).mappings().all()
@@ -19,8 +19,9 @@ LIMIT :limit
     return out
 
 def coverage(db,workspace_id,project_id=None):
-    where="WHERE workspace_id=:workspace_id" + (" AND project_id=:project_id" if project_id else "")
+    where="WHERE workspace_id=:workspace_id" + (" AND (project_id=:project_id OR project_id IS NULL)" if project_id else "")
     params={"workspace_id":workspace_id,**({"project_id":project_id} if project_id else {})}
     row=db.execute(text(f"SELECT COUNT(*) total,COUNT(embedding) embedded FROM knowledge_items {where}"),params).mappings().one()
     total=int(row["total"]); embedded=int(row["embedded"])
     return {"total":total,"embedded":embedded,"coverage":round(embedded/total,4) if total else 1}
+

@@ -1,0 +1,2 @@
+"""Workspace-scoped knowledge ingestion."""
+

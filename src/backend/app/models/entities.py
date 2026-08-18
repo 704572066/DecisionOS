@@ -57,13 +57,33 @@ class KnowledgeItem(Base):
 
     id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: uid("knowledge"))
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), index=True)
-    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    project_id: Mapped[str | None] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
     object_type: Mapped[str] = mapped_column(String(40), index=True)
     title: Mapped[str] = mapped_column(String(240))
     content: Mapped[str] = mapped_column(Text)
     source_type: Mapped[str] = mapped_column(String(80), default="manual")
     source_id: Mapped[str] = mapped_column(String(100), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class KnowledgeSource(Base):
+    __tablename__ = "knowledge_sources"
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: uid("knowledge-source"))
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), index=True)
+    project_id: Mapped[str | None] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
+    object_type: Mapped[str] = mapped_column(String(40), index=True)
+    name: Mapped[str] = mapped_column(String(240))
+    filename: Mapped[str] = mapped_column(String(500))
+    media_type: Mapped[str] = mapped_column(String(160), default="application/octet-stream")
+    storage_path: Mapped[str] = mapped_column(String(1000))
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(40), default="uploaded", index=True)
+    summary: Mapped[str] = mapped_column(Text, default="")
+    error_message: Mapped[str] = mapped_column(Text, default="")
+    item_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class Meeting(Base):
@@ -120,3 +140,4 @@ class Task(Base):
     owner: Mapped[str] = mapped_column(String(120), default="")
     status: Mapped[str] = mapped_column(String(40), default="planned")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+

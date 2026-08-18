@@ -8,6 +8,13 @@ const SESSION_STORAGE_KEY = 'decisionos.currentMeeting.v1';
 
 type Project = {id: string; name: string; businessGoal: string};
 type Identity = {user:{id:string;email:string;username:string;status:string};workspace:{id:string;name:string}};
+type KnowledgeSource = {
+  id:string; projectId:string|null; objectType:'policy'|'decision'|'document'|'evidence';
+  name:string; filename:string; mediaType:string; sizeBytes:number;
+  status:'uploaded'|'processing'|'ready'|'failed'; summary:string; errorMessage:string;
+  itemCount:number; createdAt:string; updatedAt:string;
+  items?:Array<{id:string;title:string;content:string}>;
+};
 type Reminder = {
   type?: string;
   title: string;
@@ -111,6 +118,9 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+const knowledgeStatusLabel:Record<KnowledgeSource['status'],string>={uploaded:'已上传',processing:'处理中',ready:'可用',failed:'失败'};
+const knowledgeTypeLabel:Record<KnowledgeSource['objectType'],string>={document:'文档',policy:'企业规则',decision:'历史决策',evidence:'证据'};
+
 function loadStoredSession(): {meetingId: string; projectId: string} | null {
   try {
     const raw = localStorage.getItem(SESSION_STORAGE_KEY);
@@ -132,6 +142,13 @@ function App() {
   const [authUsername,setAuthUsername]=useState('');
   const [authMessage,setAuthMessage]=useState('');
   const [authMessageType,setAuthMessageType]=useState<'info'|'error'>('info');
+  const [activeView,setActiveView]=useState<'meeting'|'knowledge'>('meeting');
+  const [knowledgeSources,setKnowledgeSources]=useState<KnowledgeSource[]>([]);
+  const [selectedKnowledge,setSelectedKnowledge]=useState<KnowledgeSource|null>(null);
+  const [knowledgeType,setKnowledgeType]=useState<KnowledgeSource['objectType']>('document');
+  const [knowledgeProjectId,setKnowledgeProjectId]=useState('');
+  const [knowledgeBusy,setKnowledgeBusy]=useState(false);
+  const knowledgeFileRef=useRef<HTMLInputElement|null>(null);
   const storedSession = useMemo(() => loadStoredSession(), []);
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState(storedSession?.projectId || '');
@@ -312,6 +329,58 @@ function App() {
       showError(getErrorMessage(error));
     }
   };
+
+  const loadKnowledge = async () => {
+    const data=await fetchJson<KnowledgeSource[]>(`${API}/knowledge`);
+    if(mountedRef.current) setKnowledgeSources(data);
+  };
+
+  const openKnowledge = async (sourceId:string) => {
+    try{setSelectedKnowledge(await fetchJson<KnowledgeSource>(`${API}/knowledge/${sourceId}`));}
+    catch(error){showError(`加载知识详情失败：${getErrorMessage(error)}`);}
+  };
+
+  const uploadKnowledge = async () => {
+    const file=knowledgeFileRef.current?.files?.[0];
+    if(!file) return showError('请选择要上传的知识文件');
+    try{
+      setKnowledgeBusy(true);
+      const form=new FormData();
+      form.append('file',file); form.append('objectType',knowledgeType);
+      if(knowledgeProjectId) form.append('projectId',knowledgeProjectId);
+      const response=await fetch(`${API}/knowledge`,{method:'POST',body:form,credentials:'include'});
+      if(!response.ok) throw new Error(await response.text() || `请求失败：HTTP ${response.status}`);
+      if(knowledgeFileRef.current) knowledgeFileRef.current.value='';
+      await loadKnowledge(); showInfo('知识已上传，系统正在解析和建立索引。');
+    }catch(error){showError(`上传知识失败：${getErrorMessage(error)}`);}
+    finally{setKnowledgeBusy(false);}
+  };
+
+  const reprocessKnowledge = async (sourceId:string) => {
+    try{await fetchJson(`${API}/knowledge/${sourceId}/reprocess`,{method:'POST'}); await loadKnowledge();}
+    catch(error){showError(`重新处理失败：${getErrorMessage(error)}`);}
+  };
+
+  const deleteKnowledge = async (source:KnowledgeSource) => {
+    if(!window.confirm(`确定删除“${source.name}”吗？删除后将立即退出 AI 检索。`)) return;
+    try{
+      const response=await fetch(`${API}/knowledge/${source.id}`,{method:'DELETE',credentials:'include'});
+      if(!response.ok) throw new Error(await response.text() || `请求失败：HTTP ${response.status}`);
+      if(selectedKnowledge?.id===source.id) setSelectedKnowledge(null);
+      await loadKnowledge(); showInfo('知识已删除。');
+    }catch(error){showError(`删除知识失败：${getErrorMessage(error)}`);}
+  };
+
+  useEffect(()=>{
+    if(!identity || activeView!=='knowledge') return;
+    loadKnowledge().catch(error=>showError(`加载知识库失败：${getErrorMessage(error)}`));
+    const timer=window.setInterval(()=>{
+      if(knowledgeSources.some(source=>source.status==='uploaded'||source.status==='processing')) {
+        loadKnowledge().catch(()=>undefined);
+      }
+    },2500);
+    return ()=>window.clearInterval(timer);
+  },[identity,activeView,knowledgeSources.some(source=>source.status==='uploaded'||source.status==='processing')]);
 
   const submitAuth=async()=>{
     try{
@@ -829,6 +898,51 @@ function App() {
         <div><small>{identity.workspace.name}</small><button className="link-button" onClick={logout}>退出</button></div>
       </header>
 
+      <nav className="workspace-nav">
+        <button className={activeView==='meeting'?'active':''} onClick={()=>setActiveView('meeting')}>当前会议</button>
+        <button className={activeView==='knowledge'?'active':''} onClick={()=>setActiveView('knowledge')}>知识库</button>
+      </nav>
+
+      {activeView==='knowledge' ? (
+        <section className="knowledge-page">
+          <div className="knowledge-heading"><div><span className="eyebrow">My Workspace</span><h2>知识库</h2><p>上传企业制度、文档、历史决策和证据，DecisionOS 会在会议中主动使用。</p></div></div>
+          <div className="knowledge-upload">
+            <input ref={knowledgeFileRef} type="file" accept=".pdf,.docx,.txt,.md,.markdown" />
+            <select value={knowledgeType} onChange={e=>setKnowledgeType(e.target.value as KnowledgeSource['objectType'])}>
+              <option value="document">文档</option><option value="policy">企业规则</option>
+              <option value="decision">历史决策</option><option value="evidence">证据</option>
+            </select>
+            <select value={knowledgeProjectId} onChange={e=>setKnowledgeProjectId(e.target.value)}>
+              <option value="">整个空间通用</option>
+              {projects.map(project=><option key={project.id} value={project.id}>{project.name}</option>)}
+            </select>
+            <button onClick={uploadKnowledge} disabled={knowledgeBusy}>{knowledgeBusy?'上传中…':'上传并处理'}</button>
+          </div>
+          <div className="knowledge-layout">
+            <div className="knowledge-list">
+              {knowledgeSources.length===0&&<p className="placeholder">还没有知识。上传第一份企业资料后，它会在这里显示。</p>}
+              {knowledgeSources.map(source=><article className="knowledge-row" key={source.id} onClick={()=>openKnowledge(source.id)}>
+                <div><span className={`knowledge-status ${source.status}`}>{knowledgeStatusLabel[source.status]}</span><strong>{source.name}</strong><small>{knowledgeTypeLabel[source.objectType]} · {source.filename} · {Math.ceil(source.sizeBytes/1024)} KB</small></div>
+                <div className="knowledge-actions">
+                  {(source.status==='failed'||source.status==='ready')&&<button className="secondary-button" onClick={e=>{e.stopPropagation();reprocessKnowledge(source.id);}}>重新处理</button>}
+                  <button className="danger-button" onClick={e=>{e.stopPropagation();deleteKnowledge(source);}}>删除</button>
+                </div>
+                {source.status==='failed'&&<p className="error-message">{source.errorMessage}</p>}
+              </article>)}
+            </div>
+            <aside className="knowledge-detail">
+              {!selectedKnowledge?<p className="placeholder">选择一条知识查看详情。</p>:<>
+                <span className={`knowledge-status ${selectedKnowledge.status}`}>{knowledgeStatusLabel[selectedKnowledge.status]}</span>
+                <h3>{selectedKnowledge.name}</h3><p>{selectedKnowledge.summary||'尚未生成摘要。'}</p>
+                <small>{selectedKnowledge.itemCount} 个知识片段 · 更新于 {new Date(selectedKnowledge.updatedAt).toLocaleString()}</small>
+                {selectedKnowledge.items?.map(item=><details key={item.id}><summary>{item.title}</summary><p>{item.content}</p></details>)}
+              </>}
+            </aside>
+          </div>
+          <footer className={messageType==='error'?'error-message':''}>{message||'知识准备完成后会自动进入会议检索。'}</footer>
+        </section>
+      ) : (<>
+
       <section className="setup">
         <h2>会议准备</h2>
         <div className="toolbar">
@@ -1140,6 +1254,7 @@ function App() {
       <footer className={messageType === 'error' ? 'error-message' : ''}>
         {message || '请先导入示例知识并创建会议。'}
       </footer>
+      </>)}
     </main>
   );
 }
