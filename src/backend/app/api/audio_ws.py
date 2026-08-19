@@ -281,6 +281,11 @@ async def meeting_audio_stream(websocket: WebSocket, meeting_id: str) -> None:
         with suppress(RuntimeError):
             await websocket.close(code=4404)
         return
+    if meeting.status != "active":
+        await send_json_safe(websocket, {"type": "error", "message": "Meeting is no longer active"})
+        with suppress(RuntimeError):
+            await websocket.close(code=4409)
+        return
 
     init = await receive_init(websocket)
     if init is None:
@@ -458,3 +463,4 @@ async def meeting_audio_stream(websocket: WebSocket, meeting_id: str) -> None:
                 await provider.close()
         with suppress(RuntimeError):
             await websocket.close()
+

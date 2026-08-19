@@ -13,6 +13,7 @@ from app.api.dialogue import router as dialogue_router
 from app.api.intervention_delivery import router as intervention_delivery_router
 from app.api.auth import router as auth_router
 from app.api.knowledge import router as knowledge_router
+from app.api.meeting_history import router as meeting_history_router
 from app.core.config import settings
 from app.db.session import Base, engine
 from app.observability.logging_config import configure_logging
@@ -42,6 +43,7 @@ app.include_router(dialogue_router)
 app.include_router(intervention_delivery_router)
 app.include_router(auth_router)
 app.include_router(knowledge_router)
+app.include_router(meeting_history_router)
 
 
 @app.on_event("startup")

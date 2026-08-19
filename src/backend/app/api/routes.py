@@ -71,6 +71,8 @@ def get_meeting(meeting_id: str, db: Session = Depends(get_db), identity: Curren
 @router.post("/meetings/{meeting_id}/transcript")
 def append_transcript(meeting_id: str, body: TranscriptAppend, db: Session = Depends(get_db), identity: CurrentIdentity = Depends(get_current_identity)):
     m = owned_meeting(db, identity.workspace.id, meeting_id)
+    if m.status != "active":
+        raise HTTPException(409, "Meeting is no longer active")
     # segment = append_final_segment(db, meeting=m, text=body.text, provider="manual")
     # return {"id": m.id, "transcript": m.transcript, "segmentId": segment.id}
     result = append_final_segment(

@@ -50,6 +50,8 @@ async def ask_dialogue(
         identity.workspace.id,
         meeting_id,
     )
+    if meeting.status != "active":
+        raise HTTPException(status_code=409, detail="Meeting is no longer active")
 
     try:
         response = (
@@ -91,3 +93,4 @@ async def reset_dialogue(
         "meetingId": meeting.id,
         "reset": True,
     }
+

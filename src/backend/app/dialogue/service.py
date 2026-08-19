@@ -15,7 +15,7 @@ from app.dialogue.store import (
     DialogueStore,
     dialogue_store,
 )
-from app.models.entities import Meeting
+from app.models.entities import Meeting, MeetingDialogueTurn
 from app.reasoning import reasoning_service
 from app.runtime.service import (
     runtime_state_service,
@@ -103,6 +103,22 @@ class DialogueService:
             ), meeting.workspace_id,
         )
 
+        db.add_all([
+            MeetingDialogueTurn(
+                workspace_id=meeting.workspace_id,
+                meeting_id=meeting.id,
+                role="user",
+                content=request.text,
+            ),
+            MeetingDialogueTurn(
+                workspace_id=meeting.workspace_id,
+                meeting_id=meeting.id,
+                role="assistant",
+                content=response.answer,
+            ),
+        ])
+        db.commit()
+
         return response
 
     def reset(
@@ -116,3 +132,4 @@ class DialogueService:
 
 
 dialogue_service = DialogueService()
+

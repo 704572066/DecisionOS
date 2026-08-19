@@ -14,6 +14,13 @@ type KnowledgeSource = {
   itemCount:number; createdAt:string; updatedAt:string;
   items?:Array<{id:string;title:string;content:string}>;
 };
+type MeetingHistoryItem={id:string;title:string;status:'ended'|'finalized';startedAt:string;endedAt:string|null;finalizedAt:string|null};
+type MeetingHistoryDetail={meeting:MeetingHistoryItem;snapshot:null|{
+  objective:string;transcript:string;findings:Array<{title:string;summary:string}>;
+  recommendations:Array<{title?:string;summary?:string;action?:string}>;
+  evidence:Array<{id:string;type:string;title:string;summary:string;score:number}>;
+  dialogue:Array<{role:string;content:string;createdAt:string}>;
+}};
 type Reminder = {
   type?: string;
   title: string;
@@ -141,12 +148,15 @@ function App() {
   const [authUsername,setAuthUsername]=useState('');
   const [authMessage,setAuthMessage]=useState('');
   const [authMessageType,setAuthMessageType]=useState<'info'|'error'>('info');
-  const [activeView,setActiveView]=useState<'meeting'|'knowledge'>('meeting');
+  const [activeView,setActiveView]=useState<'meeting'|'history'|'knowledge'>('meeting');
   const [knowledgeSources,setKnowledgeSources]=useState<KnowledgeSource[]>([]);
   const [selectedKnowledge,setSelectedKnowledge]=useState<KnowledgeSource|null>(null);
   const [knowledgeType,setKnowledgeType]=useState<KnowledgeSource['objectType']>('document');
   const [knowledgeBusy,setKnowledgeBusy]=useState(false);
   const knowledgeFileRef=useRef<HTMLInputElement|null>(null);
+  const [meetingHistory,setMeetingHistory]=useState<MeetingHistoryItem[]>([]);
+  const [historyDetail,setHistoryDetail]=useState<MeetingHistoryDetail|null>(null);
+  const [finalizingMeeting,setFinalizingMeeting]=useState(false);
   const storedSession = useMemo(() => loadStoredSession(), []);
   const [projectId, setProjectId] = useState(storedSession?.projectId || '');
   const [meetingId, setMeetingId] = useState(storedSession?.meetingId || '');
@@ -345,6 +355,29 @@ function App() {
     }catch(error){showError(`删除知识失败：${getErrorMessage(error)}`);}
   };
 
+  const loadMeetingHistory=async()=>{
+    const data=await fetchJson<MeetingHistoryItem[]>(`${API}/meeting-history`);
+    if(mountedRef.current) setMeetingHistory(data);
+  };
+
+  const openMeetingHistory=async(id:string)=>{
+    try{setHistoryDetail(await fetchJson<MeetingHistoryDetail>(`${API}/meeting-history/${id}`));}
+    catch(error){showError(`加载历史会议失败：${getErrorMessage(error)}`);}
+  };
+
+  const endAndFinalizeMeeting=async()=>{
+    if(!meetingId) return;
+    try{
+      setFinalizingMeeting(true); stopRecording(true);
+      await fetchJson(`${API}/meeting-history/${meetingId}/end`,{method:'POST'});
+      await fetchJson(`${API}/meeting-history/${meetingId}/finalize`,{method:'POST'});
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+      setMeetingId(''); setDecisionBoard(null); setFinalTranscript(''); setReminders([]);
+      await loadMeetingHistory(); setActiveView('history'); showInfo('会议已结束并固化到历史记录。');
+    }catch(error){showError(`结束会议失败：${getErrorMessage(error)}`);}
+    finally{setFinalizingMeeting(false);}
+  };
+
   useEffect(()=>{
     if(!identity || activeView!=='knowledge') return;
     loadKnowledge().catch(error=>showError(`加载知识库失败：${getErrorMessage(error)}`));
@@ -355,6 +388,10 @@ function App() {
     },2500);
     return ()=>window.clearInterval(timer);
   },[identity,activeView,knowledgeSources.some(source=>source.status==='uploaded'||source.status==='processing')]);
+
+  useEffect(()=>{
+    if(identity&&activeView==='history') loadMeetingHistory().catch(error=>showError(`加载历史会议失败：${getErrorMessage(error)}`));
+  },[identity,activeView]);
 
   useEffect(()=>{
     // Knowledge details are workspace-scoped. Never retain one user's
@@ -881,10 +918,35 @@ function App() {
 
       <nav className="workspace-nav">
         <button className={activeView==='meeting'?'active':''} onClick={()=>setActiveView('meeting')}>当前会议</button>
+        <button className={activeView==='history'?'active':''} onClick={()=>setActiveView('history')}>历史会议</button>
         <button className={activeView==='knowledge'?'active':''} onClick={()=>setActiveView('knowledge')}>知识库</button>
       </nav>
 
-      {activeView==='knowledge' ? (
+      {activeView==='history' ? (
+        <section className="history-page">
+          <div className="knowledge-heading"><div><span className="eyebrow">Final Snapshot</span><h2>历史会议</h2><p>这里展示会议结束时被冻结的状态，不会随知识库或模型变化。</p></div></div>
+          <div className="knowledge-layout">
+            <div className="knowledge-list">
+              {meetingHistory.length===0&&<p className="placeholder">还没有已结束的会议。</p>}
+              {meetingHistory.map(item=><article className="knowledge-row" key={item.id} onClick={()=>openMeetingHistory(item.id)}>
+                <div><span className={`knowledge-status ${item.status==='finalized'?'ready':'processing'}`}>{item.status==='finalized'?'已固化':'待固化'}</span><strong>{item.title}</strong><small>{new Date(item.startedAt).toLocaleString()}</small></div>
+              </article>)}
+            </div>
+            <aside className="knowledge-detail history-detail">
+              {!historyDetail?<p className="placeholder">选择一场历史会议查看 Final Snapshot。</p>:<>
+                <h3>{historyDetail.meeting.title}</h3>
+                {!historyDetail.snapshot?<p>会议已经结束，尚未固化。</p>:<>
+                  <strong>会议目标</strong><p>{historyDetail.snapshot.objective||'未识别明确目标'}</p>
+                  <strong>最终转写</strong><p className="history-transcript">{historyDetail.snapshot.transcript||'无转写内容'}</p>
+                  <strong>最终关注</strong>{historyDetail.snapshot.findings.length===0?<p>无</p>:historyDetail.snapshot.findings.map((item,index)=><p key={index}>{item.title}：{item.summary}</p>)}
+                  <strong>决策依据</strong>{historyDetail.snapshot.evidence.length===0?<p>无</p>:historyDetail.snapshot.evidence.map(item=><p key={item.id}>{item.title} · {Math.round(item.score*100)}%</p>)}
+                  <strong>对话记录</strong>{historyDetail.snapshot.dialogue.length===0?<p>无</p>:historyDetail.snapshot.dialogue.map((item,index)=><p key={index}><b>{item.role==='user'?'用户':'DecisionOS'}：</b>{item.content}</p>)}
+                </>}
+              </>}
+            </aside>
+          </div>
+        </section>
+      ) : activeView==='knowledge' ? (
         <section className="knowledge-page">
           <div className="knowledge-heading"><div><span className="eyebrow">My Workspace</span><h2>知识库</h2><p>上传企业制度、文档、历史决策和证据，DecisionOS 会在会议中主动使用。</p></div></div>
           <div className="knowledge-upload">
@@ -929,6 +991,7 @@ function App() {
           >
             创建会议
           </button>
+          {meetingId&&<button className="danger-button" onClick={endAndFinalizeMeeting} disabled={recording||finalizingMeeting}>{finalizingMeeting?'正在固化…':'结束并归档会议'}</button>}
         </div>
 
         <div className="mode-row">
