@@ -382,6 +382,13 @@ function App() {
     return ()=>window.clearInterval(timer);
   },[identity,activeView,knowledgeSources.some(source=>source.status==='uploaded'||source.status==='processing')]);
 
+  useEffect(()=>{
+    // Knowledge details are workspace-scoped. Never retain one user's
+    // in-memory selection when authentication changes to another workspace.
+    setKnowledgeSources([]);
+    setSelectedKnowledge(null);
+  },[identity?.workspace.id]);
+
   const submitAuth=async()=>{
     try{
       const data=await fetchJson<Identity>(`${API}/auth/${authMode}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:authEmail,password:authPassword,username:authUsername})});
@@ -392,7 +399,7 @@ function App() {
   const logout=async()=>{
     stopRecording(true);
     try{await fetch(`${API}/auth/logout`,{method:'POST',credentials:'include'});}finally{
-      localStorage.removeItem(SESSION_STORAGE_KEY); setIdentity(null); setProjects([]); setProjectId(''); setMeetingId(''); setDecisionBoard(null); setReminders([]);
+      localStorage.removeItem(SESSION_STORAGE_KEY); setIdentity(null); setProjects([]); setProjectId(''); setMeetingId(''); setDecisionBoard(null); setReminders([]); setKnowledgeSources([]); setSelectedKnowledge(null); setActiveView('meeting');
     }
   };
 
