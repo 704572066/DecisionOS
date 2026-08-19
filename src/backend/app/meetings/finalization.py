@@ -63,6 +63,7 @@ class MeetingFinalizationService:
             "canonicalContext": state.canonicalContext if state else "",
             "semanticState": dict((state.decisionFacts or {}).get("semanticState", {}) or {}) if state else {},
             "decisionState": dict(state.decisionState or {}) if state else {},
+            "recentEvents": list(state.recentEvents or []) if state else [],
             "findings": board_data["reasoning"]["findings"],
             "recommendations": board_data["reasoning"]["recommendations"],
             "interventions": board_data["reasoning"]["interventions"],

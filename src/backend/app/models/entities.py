@@ -111,6 +111,17 @@ class MeetingFinalSnapshot(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class MeetingSummary(Base):
+    __tablename__ = "meeting_summaries"
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: uid("meeting-summary"))
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), index=True)
+    meeting_id: Mapped[str] = mapped_column(ForeignKey("meetings.id"), unique=True, index=True)
+    snapshot_id: Mapped[str] = mapped_column(ForeignKey("meeting_final_snapshots.id"), index=True)
+    result: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class MeetingDialogueTurn(Base):
     __tablename__ = "meeting_dialogue_turns"
 

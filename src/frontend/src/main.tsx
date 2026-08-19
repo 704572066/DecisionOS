@@ -21,6 +21,12 @@ type MeetingHistoryDetail={meeting:MeetingHistoryItem;snapshot:null|{
   evidence:Array<{id:string;type:string;title:string;summary:string;score:number}>;
   dialogue:Array<{role:string;content:string;createdAt:string}>;
 }};
+type MeetingSummaryResult={meetingId:string;summary:string;
+  keyFacts:Array<{text:string;sourceIds:string[]}>;decisions:Array<{text:string;sourceIds:string[]}>;
+  actionItems:Array<{text:string;sourceIds:string[]}>;openIssues:Array<{text:string;sourceIds:string[]}>;
+  evidence:Array<{sourceId:string;sourceType:string;text:string}>;generatedAt:string;
+  diagnostics:{extractionMode?:string;acceptedCount?:number;rejectedCount?:number};
+};
 type Reminder = {
   type?: string;
   title: string;
@@ -156,6 +162,8 @@ function App() {
   const knowledgeFileRef=useRef<HTMLInputElement|null>(null);
   const [meetingHistory,setMeetingHistory]=useState<MeetingHistoryItem[]>([]);
   const [historyDetail,setHistoryDetail]=useState<MeetingHistoryDetail|null>(null);
+  const [meetingSummary,setMeetingSummary]=useState<MeetingSummaryResult|null>(null);
+  const [summaryBusy,setSummaryBusy]=useState(false);
   const [finalizingMeeting,setFinalizingMeeting]=useState(false);
   const storedSession = useMemo(() => loadStoredSession(), []);
   const [projectId, setProjectId] = useState(storedSession?.projectId || '');
@@ -366,9 +374,18 @@ function App() {
     const requestedWorkspaceId=workspaceIdRef.current;
     try{
       const data=await fetchJson<MeetingHistoryDetail>(`${API}/meeting-history/${id}`);
-      if(mountedRef.current&&requestedWorkspaceId&&workspaceIdRef.current===requestedWorkspaceId) setHistoryDetail(data);
+      if(mountedRef.current&&requestedWorkspaceId&&workspaceIdRef.current===requestedWorkspaceId) {
+        setHistoryDetail(data); setMeetingSummary(null);
+        try{setMeetingSummary(await fetchJson<MeetingSummaryResult>(`${API}/meeting-history/${id}/summary`));}catch{/* summary is optional */}
+      }
     }
     catch(error){showError(`加载历史会议失败：${getErrorMessage(error)}`);}
+  };
+
+  const generateMeetingSummary=async()=>{
+    if(!historyDetail) return;
+    try{setSummaryBusy(true);setMeetingSummary(await fetchJson<MeetingSummaryResult>(`${API}/meeting-history/${historyDetail.meeting.id}/summary`,{method:'POST'}));showInfo('结构化会议总结已生成。');}
+    catch(error){showError(`生成会议总结失败：${getErrorMessage(error)}`);}finally{setSummaryBusy(false);}
   };
 
   const endAndFinalizeMeeting=async()=>{
@@ -407,6 +424,7 @@ function App() {
     setSelectedKnowledge(null);
     setMeetingHistory([]);
     setHistoryDetail(null);
+    setMeetingSummary(null);
   },[identity?.workspace.id]);
 
   const submitAuth=async()=>{
@@ -419,7 +437,7 @@ function App() {
   const logout=async()=>{
     stopRecording(true);
     try{await fetch(`${API}/auth/logout`,{method:'POST',credentials:'include'});}finally{
-      localStorage.removeItem(SESSION_STORAGE_KEY); setIdentity(null); setProjectId(''); setMeetingId(''); setDecisionBoard(null); setReminders([]); setKnowledgeSources([]); setSelectedKnowledge(null); setMeetingHistory([]); setHistoryDetail(null); setActiveView('meeting');
+      localStorage.removeItem(SESSION_STORAGE_KEY); setIdentity(null); setProjectId(''); setMeetingId(''); setDecisionBoard(null); setReminders([]); setKnowledgeSources([]); setSelectedKnowledge(null); setMeetingHistory([]); setHistoryDetail(null); setMeetingSummary(null); setActiveView('meeting');
     }
   };
 
@@ -950,6 +968,15 @@ function App() {
                   <strong>最终关注</strong>{historyDetail.snapshot.findings.length===0?<p>无</p>:historyDetail.snapshot.findings.map((item,index)=><p key={index}>{item.title}：{item.summary}</p>)}
                   <strong>决策依据</strong>{historyDetail.snapshot.evidence.length===0?<p>无</p>:historyDetail.snapshot.evidence.map(item=><p key={item.id}>{item.title} · {Math.round(item.score*100)}%</p>)}
                   <strong>对话记录</strong>{historyDetail.snapshot.dialogue.length===0?<p>无</p>:historyDetail.snapshot.dialogue.map((item,index)=><p key={index}><b>{item.role==='user'?'用户':'DecisionOS'}：</b>{item.content}</p>)}
+                  <div className="summary-heading"><strong>结构化会议总结</strong>{!meetingSummary&&<button className="secondary-button" onClick={generateMeetingSummary} disabled={summaryBusy}>{summaryBusy?'生成中…':'生成总结'}</button>}</div>
+                  {meetingSummary&&<section className="meeting-summary">
+                    <p>{meetingSummary.summary}</p>
+                    <strong>已确认事实</strong>{meetingSummary.keyFacts.length?<ul>{meetingSummary.keyFacts.map((item,index)=><li key={index}>{item.text}</li>)}</ul>:<p>无</p>}
+                    <strong>会议决策</strong>{meetingSummary.decisions.length?<ul>{meetingSummary.decisions.map((item,index)=><li key={index}>{item.text}</li>)}</ul>:<p>本次会议未形成明确决策。</p>}
+                    <strong>后续行动</strong>{meetingSummary.actionItems.length?<ul>{meetingSummary.actionItems.map((item,index)=><li key={index}>{item.text}</li>)}</ul>:<p>无</p>}
+                    <strong>未解决问题</strong>{meetingSummary.openIssues.length?<ul>{meetingSummary.openIssues.map((item,index)=><li key={index}>{item.text}</li>)}</ul>:<p>无</p>}
+                    <small>{meetingSummary.diagnostics.extractionMode==='llm'?'AI 提取 + 规则校验':'规则提取'} · {meetingSummary.evidence.length} 条可追溯依据</small>
+                  </section>}
                 </>}
               </>}
             </aside>
