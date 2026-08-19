@@ -204,6 +204,7 @@ function App() {
   const heartbeatTimerRef = useRef<number | null>(null);
   const intentionalSocketCloseRef = useRef(false);
   const mountedRef = useRef(true);
+  const workspaceIdRef = useRef('');
 
   const browserSpeechSupported = useMemo(
     () => Boolean(window.SpeechRecognition || window.webkitSpeechRecognition),
@@ -224,7 +225,7 @@ function App() {
     input: RequestInfo | URL,
     init?: RequestInit,
   ): Promise<T> => {
-    const response = await fetch(input, {...init, credentials:'include'});
+    const response = await fetch(input, {...init, credentials:'include', cache:'no-store'});
     if (!response.ok) {
       const detail = await response.text();
       throw new Error(detail || `请求失败：HTTP ${response.status}`);
@@ -356,12 +357,17 @@ function App() {
   };
 
   const loadMeetingHistory=async()=>{
+    const requestedWorkspaceId=workspaceIdRef.current;
     const data=await fetchJson<MeetingHistoryItem[]>(`${API}/meeting-history`);
-    if(mountedRef.current) setMeetingHistory(data);
+    if(mountedRef.current&&requestedWorkspaceId&&workspaceIdRef.current===requestedWorkspaceId) setMeetingHistory(data);
   };
 
   const openMeetingHistory=async(id:string)=>{
-    try{setHistoryDetail(await fetchJson<MeetingHistoryDetail>(`${API}/meeting-history/${id}`));}
+    const requestedWorkspaceId=workspaceIdRef.current;
+    try{
+      const data=await fetchJson<MeetingHistoryDetail>(`${API}/meeting-history/${id}`);
+      if(mountedRef.current&&requestedWorkspaceId&&workspaceIdRef.current===requestedWorkspaceId) setHistoryDetail(data);
+    }
     catch(error){showError(`加载历史会议失败：${getErrorMessage(error)}`);}
   };
 
@@ -395,9 +401,12 @@ function App() {
 
   useEffect(()=>{
     // Knowledge details are workspace-scoped. Never retain one user's
-    // in-memory selection when authentication changes to another workspace.
+    // in-memory data when authentication changes to another workspace.
+    workspaceIdRef.current=identity?.workspace.id||'';
     setKnowledgeSources([]);
     setSelectedKnowledge(null);
+    setMeetingHistory([]);
+    setHistoryDetail(null);
   },[identity?.workspace.id]);
 
   const submitAuth=async()=>{
@@ -410,7 +419,7 @@ function App() {
   const logout=async()=>{
     stopRecording(true);
     try{await fetch(`${API}/auth/logout`,{method:'POST',credentials:'include'});}finally{
-      localStorage.removeItem(SESSION_STORAGE_KEY); setIdentity(null); setProjectId(''); setMeetingId(''); setDecisionBoard(null); setReminders([]); setKnowledgeSources([]); setSelectedKnowledge(null); setActiveView('meeting');
+      localStorage.removeItem(SESSION_STORAGE_KEY); setIdentity(null); setProjectId(''); setMeetingId(''); setDecisionBoard(null); setReminders([]); setKnowledgeSources([]); setSelectedKnowledge(null); setMeetingHistory([]); setHistoryDetail(null); setActiveView('meeting');
     }
   };
 

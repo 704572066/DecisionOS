@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -11,6 +11,13 @@ from app.models.entities import Meeting, MeetingFinalSnapshot
 router = APIRouter(prefix="/api/meeting-history", tags=["meeting-history"])
 
 
+def disable_private_cache(response: Response) -> None:
+    # History snapshots contain workspace-private meeting content. Explicitly
+    # prevent a browser from reusing one user's response after account switch.
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["Pragma"] = "no-cache"
+
+
 def meeting_json(meeting: Meeting):
     return {
         "id": meeting.id, "title": meeting.title, "status": meeting.status,
@@ -21,7 +28,9 @@ def meeting_json(meeting: Meeting):
 
 
 @router.get("")
-def list_history(db: Session = Depends(get_db), identity: CurrentIdentity = Depends(get_current_identity)):
+def list_history(response: Response, db: Session = Depends(get_db),
+                 identity: CurrentIdentity = Depends(get_current_identity)):
+    disable_private_cache(response)
     meetings = db.scalars(select(Meeting).where(
         Meeting.workspace_id == identity.workspace.id,
         Meeting.status.in_(["ended", "finalized"]),
@@ -30,8 +39,9 @@ def list_history(db: Session = Depends(get_db), identity: CurrentIdentity = Depe
 
 
 @router.get("/{meeting_id}")
-def get_history(meeting_id: str, db: Session = Depends(get_db),
+def get_history(meeting_id: str, response: Response, db: Session = Depends(get_db),
                 identity: CurrentIdentity = Depends(get_current_identity)):
+    disable_private_cache(response)
     meeting = owned_meeting(db, identity.workspace.id, meeting_id)
     if meeting.status == "active":
         raise HTTPException(409, "Meeting is still active")

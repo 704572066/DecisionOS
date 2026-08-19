@@ -62,8 +62,13 @@ def run():
         assert again.status_code == 200 and again.json()["snapshot"] == frozen
         detail = owner.get(f"/api/meeting-history/{meeting_id}")
         assert detail.status_code == 200 and detail.json()["snapshot"] == frozen
-        assert any(item["id"] == meeting_id for item in owner.get("/api/meeting-history").json())
+        owner_history = owner.get("/api/meeting-history")
+        assert owner_history.headers["cache-control"] == "private, no-store"
+        assert any(item["id"] == meeting_id for item in owner_history.json())
 
+        other_history = other.get("/api/meeting-history")
+        assert other_history.status_code == 200 and other_history.json() == []
+        assert other_history.headers["cache-control"] == "private, no-store"
         assert other.get(f"/api/meeting-history/{meeting_id}").status_code == 404
         assert other.post(f"/api/meeting-history/{meeting_id}/end").status_code == 404
     print("PHASE 3.3.1 MEETING FINALIZATION: OK")
