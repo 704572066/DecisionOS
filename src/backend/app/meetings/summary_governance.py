@@ -5,7 +5,7 @@ from app.meetings.summary_models import MeetingSummaryResult, SummaryCandidate, 
 
 
 DECISION_MARKERS = re.compile(r"(最终决定|决定按|就按|按.+签|确认按|双方确认|同意按|接受.+并|推进签约)")
-NON_DECISION_MARKERS = re.compile(r"(建议|希望|要求|提议|拒绝|不接受|撤回|作废|改为|待确认|如果|可能)")
+NON_DECISION_MARKERS = re.compile(r"(建议|希望|要求|提议|拒绝|不接受|撤回|作废|待确认|如果|可能)")
 INVALID_STATUSES = {"rejected", "revoked", "superseded", "withdrawn", "proposed", "pending"}
 ACTION_MARKERS = re.compile(r"(下一步|会后|由.+负责|请.+(?:跟进|完成|确认))")
 ASSERTION_MARKERS = ("同意", "接受", "拒绝", "低于", "高于", "超过", "满足", "导致", "最终")

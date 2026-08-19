@@ -27,6 +27,7 @@ type MeetingSummaryResult={meetingId:string;summary:string;
   evidence:Array<{sourceId:string;sourceType:string;text:string}>;generatedAt:string;
   diagnostics:{extractionMode?:string;acceptedCount?:number;rejectedCount?:number};
 };
+type DecisionMemory={id:string;sourceMeetingId:string;decision:string;status:'active'|'superseded'|'revoked';supersedesId:string|null};
 type Reminder = {
   type?: string;
   title: string;
@@ -163,6 +164,7 @@ function App() {
   const [meetingHistory,setMeetingHistory]=useState<MeetingHistoryItem[]>([]);
   const [historyDetail,setHistoryDetail]=useState<MeetingHistoryDetail|null>(null);
   const [meetingSummary,setMeetingSummary]=useState<MeetingSummaryResult|null>(null);
+  const [decisionMemories,setDecisionMemories]=useState<DecisionMemory[]>([]);
   const [summaryBusy,setSummaryBusy]=useState(false);
   const [finalizingMeeting,setFinalizingMeeting]=useState(false);
   const storedSession = useMemo(() => loadStoredSession(), []);
@@ -376,7 +378,10 @@ function App() {
       const data=await fetchJson<MeetingHistoryDetail>(`${API}/meeting-history/${id}`);
       if(mountedRef.current&&requestedWorkspaceId&&workspaceIdRef.current===requestedWorkspaceId) {
         setHistoryDetail(data); setMeetingSummary(null);
-        try{setMeetingSummary(await fetchJson<MeetingSummaryResult>(`${API}/meeting-history/${id}/summary`));}catch{/* summary is optional */}
+        try{
+          setMeetingSummary(await fetchJson<MeetingSummaryResult>(`${API}/meeting-history/${id}/summary`));
+          setDecisionMemories(await fetchJson<DecisionMemory[]>(`${API}/decision-memories?meetingId=${encodeURIComponent(id)}`));
+        }catch{/* summary is optional */}
       }
     }
     catch(error){showError(`加载历史会议失败：${getErrorMessage(error)}`);}
@@ -384,7 +389,7 @@ function App() {
 
   const generateMeetingSummary=async()=>{
     if(!historyDetail) return;
-    try{setSummaryBusy(true);setMeetingSummary(await fetchJson<MeetingSummaryResult>(`${API}/meeting-history/${historyDetail.meeting.id}/summary`,{method:'POST'}));showInfo('结构化会议总结已生成。');}
+    try{setSummaryBusy(true);setMeetingSummary(await fetchJson<MeetingSummaryResult>(`${API}/meeting-history/${historyDetail.meeting.id}/summary`,{method:'POST'}));setDecisionMemories(await fetchJson<DecisionMemory[]>(`${API}/decision-memories?meetingId=${encodeURIComponent(historyDetail.meeting.id)}`));showInfo('结构化会议总结已生成，已确认决策已沉淀为长期记忆。');}
     catch(error){showError(`生成会议总结失败：${getErrorMessage(error)}`);}finally{setSummaryBusy(false);}
   };
 
@@ -425,6 +430,7 @@ function App() {
     setMeetingHistory([]);
     setHistoryDetail(null);
     setMeetingSummary(null);
+    setDecisionMemories([]);
   },[identity?.workspace.id]);
 
   const submitAuth=async()=>{
@@ -437,7 +443,7 @@ function App() {
   const logout=async()=>{
     stopRecording(true);
     try{await fetch(`${API}/auth/logout`,{method:'POST',credentials:'include'});}finally{
-      localStorage.removeItem(SESSION_STORAGE_KEY); setIdentity(null); setProjectId(''); setMeetingId(''); setDecisionBoard(null); setReminders([]); setKnowledgeSources([]); setSelectedKnowledge(null); setMeetingHistory([]); setHistoryDetail(null); setMeetingSummary(null); setActiveView('meeting');
+      localStorage.removeItem(SESSION_STORAGE_KEY); setIdentity(null); setProjectId(''); setMeetingId(''); setDecisionBoard(null); setReminders([]); setKnowledgeSources([]); setSelectedKnowledge(null); setMeetingHistory([]); setHistoryDetail(null); setMeetingSummary(null); setDecisionMemories([]); setActiveView('meeting');
     }
   };
 
@@ -973,6 +979,7 @@ function App() {
                     <p>{meetingSummary.summary}</p>
                     <strong>已确认事实</strong>{meetingSummary.keyFacts.length?<ul>{meetingSummary.keyFacts.map((item,index)=><li key={index}>{item.text}</li>)}</ul>:<p>无</p>}
                     <strong>会议决策</strong>{meetingSummary.decisions.length?<ul>{meetingSummary.decisions.map((item,index)=><li key={index}>{item.text}</li>)}</ul>:<p>本次会议未形成明确决策。</p>}
+                    {decisionMemories.length>0&&<p className="memory-confirmed">✓ 已沉淀 {decisionMemories.filter(item=>item.status==='active').length} 条有效决策记忆</p>}
                     <strong>后续行动</strong>{meetingSummary.actionItems.length?<ul>{meetingSummary.actionItems.map((item,index)=><li key={index}>{item.text}</li>)}</ul>:<p>无</p>}
                     <strong>未解决问题</strong>{meetingSummary.openIssues.length?<ul>{meetingSummary.openIssues.map((item,index)=><li key={index}>{item.text}</li>)}</ul>:<p>无</p>}
                     <small>{meetingSummary.diagnostics.extractionMode==='llm'?'AI 提取 + 规则校验':'规则提取'} · {meetingSummary.evidence.length} 条可追溯依据</small>

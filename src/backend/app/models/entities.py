@@ -122,6 +122,28 @@ class MeetingSummary(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class DecisionMemory(Base):
+    __tablename__ = "decision_memories"
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: uid("decision-memory"))
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), index=True)
+    source_meeting_id: Mapped[str] = mapped_column(ForeignKey("meetings.id"), index=True)
+    source_summary_id: Mapped[str] = mapped_column(ForeignKey("meeting_summaries.id"), index=True)
+    source_decision_id: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    knowledge_item_id: Mapped[str | None] = mapped_column(ForeignKey("knowledge_items.id"), nullable=True, unique=True)
+    supersedes_id: Mapped[str | None] = mapped_column(ForeignKey("decision_memories.id"), nullable=True)
+    title: Mapped[str] = mapped_column(String(240))
+    decision: Mapped[str] = mapped_column(Text)
+    subject: Mapped[str] = mapped_column(String(240), default="")
+    status: Mapped[str] = mapped_column(String(40), default="active", index=True)
+    confidence: Mapped[float] = mapped_column(Float, default=1.0)
+    source_ids: Mapped[list] = mapped_column(JSON, default=list)
+    evidence: Mapped[list] = mapped_column(JSON, default=list)
+    attributes: Mapped[dict] = mapped_column(JSON, default=dict)
+    effective_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class MeetingDialogueTurn(Base):
     __tablename__ = "meeting_dialogue_turns"
 

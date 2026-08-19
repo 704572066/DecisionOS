@@ -355,6 +355,7 @@ class GeneralReasoningContextBuilder:
 
         if normalized in {
             "decision",
+            "decision_memory",
             "document",
             "crm",
         }:
@@ -391,3 +392,4 @@ class GeneralReasoningContextBuilder:
 general_reasoning_context_builder = (
     GeneralReasoningContextBuilder()
 )
+

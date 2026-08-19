@@ -13,7 +13,10 @@ class MeetingSummaryService:
 
     async def generate(self, db, meeting: Meeting) -> MeetingSummary:
         existing = self.get(db, meeting)
-        if existing: return existing
+        if existing:
+            from app.meetings.decision_memory import decision_memory_service
+            decision_memory_service.sync(db, meeting, existing)
+            return existing
         snapshot = db.scalar(select(MeetingFinalSnapshot).where(MeetingFinalSnapshot.workspace_id == meeting.workspace_id, MeetingFinalSnapshot.meeting_id == meeting.id))
         if not snapshot: raise ValueError("Final snapshot is required")
         context = build_summary_context(meeting.id, snapshot.payload)
@@ -21,6 +24,8 @@ class MeetingSummaryService:
         result = summary_governance.validate(context, candidate, extraction_mode=mode)
         row = MeetingSummary(workspace_id=meeting.workspace_id, meeting_id=meeting.id, snapshot_id=snapshot.id, result=result.model_dump(mode="json"))
         db.add(row); db.commit(); db.refresh(row)
+        from app.meetings.decision_memory import decision_memory_service
+        decision_memory_service.sync(db, meeting, row)
         return row
 
     @staticmethod

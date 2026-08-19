@@ -62,6 +62,8 @@ def api_acceptance():
         created = owner.post(f"/api/meeting-history/{meeting_id}/summary")
         assert created.status_code == 200, created.text
         assert len(created.json()["decisions"]) == 1
+        memories = owner.get(f"/api/decision-memories?meetingId={meeting_id}")
+        assert memories.status_code == 200 and len(memories.json()) == 1
         assert owner.get(f"/api/meeting-history/{meeting_id}/summary").json() == created.json()
         assert other.get(f"/api/meeting-history/{meeting_id}/summary").status_code == 404
         assert other.post(f"/api/meeting-history/{meeting_id}/summary").status_code == 404

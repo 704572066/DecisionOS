@@ -281,9 +281,17 @@ class ConversationAgent:
     ) -> DialogueResponse:
 
         if not llm_provider.enabled:
-            raise RuntimeError(
-                "LLM is not configured"
-            )
+            memories = [item for item in (state.rerankedEvidence or []) if item.get("sourceType") == "decision_memory"]
+            if memories:
+                source = memories[0]
+                source_id = str(source.get("objectId") or source.get("itemId") or "")
+                return DialogueResponse(
+                    meetingId=meeting_id, conversationId=conversation_id,
+                    answer=f"这个判断依据来自{source.get('title') or '历史会议决策'}：{source.get('summary') or ''}",
+                    intent="explanation", confidence=.95, sourceIds=[source_id] if source_id else [],
+                    diagnostics={"mode": "decision_memory_fallback", "evidenceCount": len(memories)},
+                )
+            raise RuntimeError("LLM is not configured")
 
         context = self._context_payload(
             state=state,
@@ -661,3 +669,4 @@ class ConversationAgent:
 
 
 conversation_agent = ConversationAgent()
+
