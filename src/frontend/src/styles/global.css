@@ -1,0 +1,7 @@
+/* Phase 3.4.0 keeps the proven cascade intact while giving future changes module entry points. */
+@import './workspace.css';
+@import './auth.css';
+@import './meeting.css';
+@import './decision-board.css';
+@import './knowledge.css';
+@import './history.css';
