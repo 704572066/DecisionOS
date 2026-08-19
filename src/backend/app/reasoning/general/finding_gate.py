@@ -463,7 +463,9 @@ class FindingGate:
         }
 
         source_type = (
-            source.sourceType
+            "decision"
+            if source.sourceType == "decision_memory"
+            else source.sourceType
             if source.sourceType in allowed
             else "other"
         )
@@ -482,3 +484,4 @@ class FindingGate:
 
 
 finding_gate = FindingGate()
+

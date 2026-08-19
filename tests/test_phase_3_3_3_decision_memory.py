@@ -46,7 +46,7 @@ def run():
         owner.post(f"/api/meetings/{meeting_b}/analyze")
         board = owner.post(f"/api/decision-board/{meeting_b}/refresh").json()
         assert any(row["type"] == "decision_memory" and meeting_a in row["summary"] for row in board["evidence"])
-        assert any("历史会议决策" in row["title"] for row in board["reasoning"]["findings"])
+        assert any("历史会议决策" in row["title"] for row in board["reasoning"]["findings"]), board["reasoning"]
         dialogue = owner.post(f"/api/dialogue/{meeting_b}", json={"text": "你为什么这么判断？"})
         assert dialogue.status_code == 200 and meeting_a in dialogue.json()["answer"]
         assert memories_a[0]["id"] in dialogue.json()["sourceIds"]

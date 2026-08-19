@@ -97,7 +97,18 @@ class LLMGeneralReasonerBackend(
 
     @staticmethod
     def _historical_decision_candidates(context: GeneralReasoningContext) -> list[GeneralFindingCandidate]:
-        current = (context.decisionState or {}).get("commercial") or {}
+        current = dict((context.decisionState or {}).get("commercial") or {})
+        # Customer proposals/requirements are not always executable
+        # decisionState yet. They are still the current meeting condition to
+        # compare with a historical decision, so fall back to the frozen
+        # canonical conversation text without promoting it to a decision.
+        conversation = context.canonicalContext or ""
+        if current.get("discountPercent") is None:
+            value = re.search(r"(\d+(?:\.\d+)?)\s*%", conversation)
+            if value: current["discountPercent"] = float(value.group(1))
+        if current.get("paymentTermDays") is None:
+            value = re.search(r"(\d+)\s*天", conversation)
+            if value: current["paymentTermDays"] = int(value.group(1))
         if not current:
             return []
         output = []
