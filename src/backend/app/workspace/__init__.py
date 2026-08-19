@@ -1,0 +1,2 @@
+"""Workspace-level compatibility helpers."""
+

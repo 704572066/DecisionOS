@@ -6,7 +6,6 @@ const API = import.meta.env.VITE_API_BASE_URL || '';
 const WS_BASE = import.meta.env.VITE_WS_BASE_URL || '';
 const SESSION_STORAGE_KEY = 'decisionos.currentMeeting.v1';
 
-type Project = {id: string; name: string; businessGoal: string};
 type Identity = {user:{id:string;email:string;username:string;status:string};workspace:{id:string;name:string}};
 type KnowledgeSource = {
   id:string; projectId:string|null; objectType:'policy'|'decision'|'document'|'evidence';
@@ -146,11 +145,9 @@ function App() {
   const [knowledgeSources,setKnowledgeSources]=useState<KnowledgeSource[]>([]);
   const [selectedKnowledge,setSelectedKnowledge]=useState<KnowledgeSource|null>(null);
   const [knowledgeType,setKnowledgeType]=useState<KnowledgeSource['objectType']>('document');
-  const [knowledgeProjectId,setKnowledgeProjectId]=useState('');
   const [knowledgeBusy,setKnowledgeBusy]=useState(false);
   const knowledgeFileRef=useRef<HTMLInputElement|null>(null);
   const storedSession = useMemo(() => loadStoredSession(), []);
-  const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState(storedSession?.projectId || '');
   const [meetingId, setMeetingId] = useState(storedSession?.meetingId || '');
   const [finalTranscript, setFinalTranscript] = useState('');
@@ -232,13 +229,6 @@ function App() {
     );
   };
 
-  const loadProjects = async () => {
-    const data = await fetchJson<Project[]>(`${API}/projects`);
-    if (!mountedRef.current) return;
-    setProjects(data);
-    if (data[0]) setProjectId((current) => current || data[0].id);
-  };
-
   const loadDecisionBoard = async (targetMeetingId: string, silent = true, force = false) => {
     if (!targetMeetingId) return;
     try {
@@ -292,7 +282,6 @@ function App() {
       try {
         const me=await fetchJson<Identity>(`${API}/auth/me`);
         setIdentity(me);
-        await loadProjects();
         if (storedSession?.meetingId) {
           await restoreMeeting(storedSession.meetingId);
         }
@@ -316,20 +305,6 @@ function App() {
     if(window.location.pathname!==target) window.history.replaceState({},'',target);
   },[authReady,identity]);
 
-  const seed = async () => {
-    try {
-      const data = await fetchJson<{projectId: string; message: string}>(
-        `${API}/demo/seed`,
-        {method: 'POST'},
-      );
-      await loadProjects();
-      setProjectId(data.projectId);
-      showInfo(data.message);
-    } catch (error) {
-      showError(getErrorMessage(error));
-    }
-  };
-
   const loadKnowledge = async () => {
     const data=await fetchJson<KnowledgeSource[]>(`${API}/knowledge`);
     if(mountedRef.current) setKnowledgeSources(data);
@@ -347,7 +322,6 @@ function App() {
       setKnowledgeBusy(true);
       const form=new FormData();
       form.append('file',file); form.append('objectType',knowledgeType);
-      if(knowledgeProjectId) form.append('projectId',knowledgeProjectId);
       const response=await fetch(`${API}/knowledge`,{method:'POST',body:form,credentials:'include'});
       if(!response.ok) throw new Error(await response.text() || `请求失败：HTTP ${response.status}`);
       if(knowledgeFileRef.current) knowledgeFileRef.current.value='';
@@ -392,14 +366,14 @@ function App() {
   const submitAuth=async()=>{
     try{
       const data=await fetchJson<Identity>(`${API}/auth/${authMode}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:authEmail,password:authPassword,username:authUsername})});
-      setAuthMessage(''); setIdentity(data); setAuthReady(true); await loadProjects(); showInfo(`已进入${data.workspace.name}`);
+      setAuthMessage(''); setIdentity(data); setAuthReady(true); showInfo(`已进入${data.workspace.name}`);
     }catch(error){setAuthMessageType('error');setAuthMessage(getErrorMessage(error));}
   };
 
   const logout=async()=>{
     stopRecording(true);
     try{await fetch(`${API}/auth/logout`,{method:'POST',credentials:'include'});}finally{
-      localStorage.removeItem(SESSION_STORAGE_KEY); setIdentity(null); setProjects([]); setProjectId(''); setMeetingId(''); setDecisionBoard(null); setReminders([]); setKnowledgeSources([]); setSelectedKnowledge(null); setActiveView('meeting');
+      localStorage.removeItem(SESSION_STORAGE_KEY); setIdentity(null); setProjectId(''); setMeetingId(''); setDecisionBoard(null); setReminders([]); setKnowledgeSources([]); setSelectedKnowledge(null); setActiveView('meeting');
     }
   };
 
@@ -413,7 +387,7 @@ function App() {
       }>(`${API}/meetings`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({projectId, title: '客户商务谈判'}),
+        body: JSON.stringify({title: '客户商务谈判'}),
       });
       setMeetingId(data.id);
       setFinalTranscript('');
@@ -919,10 +893,6 @@ function App() {
               <option value="document">文档</option><option value="policy">企业规则</option>
               <option value="decision">历史决策</option><option value="evidence">证据</option>
             </select>
-            <select value={knowledgeProjectId} onChange={e=>setKnowledgeProjectId(e.target.value)}>
-              <option value="">整个空间通用</option>
-              {projects.map(project=><option key={project.id} value={project.id}>{project.name}</option>)}
-            </select>
             <button onClick={uploadKnowledge} disabled={knowledgeBusy}>{knowledgeBusy?'上传中…':'上传并处理'}</button>
           </div>
           <div className="knowledge-layout">
@@ -953,21 +923,9 @@ function App() {
       <section className="setup">
         <h2>会议准备</h2>
         <div className="toolbar">
-          <button onClick={seed}>导入示例知识</button>
-          <select
-            value={projectId}
-            onChange={(event) => setProjectId(event.target.value)}
-          >
-            <option value="">选择项目</option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
           <button
             onClick={createMeeting}
-            disabled={!projectId || recording}
+            disabled={recording}
           >
             创建会议
           </button>
@@ -1259,7 +1217,7 @@ function App() {
       )}
 
       <footer className={messageType === 'error' ? 'error-message' : ''}>
-        {message || '请先导入示例知识并创建会议。'}
+        {message || '创建会议后即可开始实时分析。'}
       </footer>
       </>)}
     </main>

@@ -33,10 +33,11 @@ def confirm_candidate(body: ConfirmDecisionRequest, db: Session=Depends(get_db),
     }, ensure_ascii=False)
     decision=Decision(workspace_id=identity.workspace.id,project_id=candidate.projectId, meeting_id=candidate.meetingId, title=title, statement=statement, evidence_summary=evidence_summary)
     db.add(decision); db.flush()
-    db.add(KnowledgeItem(workspace_id=identity.workspace.id,project_id=candidate.projectId, object_type="decision", title=title, content=statement, source_type="decision", source_id=decision.id))
+    db.add(KnowledgeItem(workspace_id=identity.workspace.id,project_id=None, object_type="decision", title=title, content=statement, source_type="decision", source_id=decision.id))
     task=None
     if body.taskTitle and body.taskObjective:
         task=Task(workspace_id=identity.workspace.id,project_id=candidate.projectId, decision_id=decision.id, title=body.taskTitle.strip(), objective=body.taskObjective.strip(), owner=body.taskOwner.strip())
         db.add(task)
     db.commit(); db.refresh(decision)
     return {"decisionId":decision.id,"taskId":task.id if task else None,"status":"confirmed","knowledgeUpdated":True}
+

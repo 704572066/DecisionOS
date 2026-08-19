@@ -39,6 +39,31 @@ class AIReminderEngine:
         context = build_meeting_context(db, meeting)
         context_ms = (time.perf_counter() - context_started) * 1000
 
+        if not (context.cleanTranscriptWindow or "").strip():
+            return {
+                "meetingId": meeting.id,
+                "context": context.model_dump(mode="json"),
+                "topics": [],
+                "retrieval": {
+                    "mode": "skipped-empty-transcript",
+                    "query": "",
+                    "results": [],
+                    "diagnostics": {"reason": "empty_transcript"},
+                },
+                "rerankedEvidence": [],
+                "reminders": [],
+                "diagnostics": {
+                    "generationMode": "skipped-empty-transcript",
+                    "llmConfigured": llm_provider.enabled,
+                    "llmError": None,
+                    "contextMs": round(context_ms, 2),
+                    "retrievalMs": 0.0,
+                    "rerankMs": 0.0,
+                    "llmMs": 0.0,
+                    "totalMs": round((time.perf_counter() - started) * 1000, 2),
+                },
+            }
+
         retrieval_started = time.perf_counter()
         retrieval = await hybrid_retriever.search(
             db,
@@ -177,3 +202,4 @@ class AIReminderEngine:
 
 
 ai_reminder_engine = AIReminderEngine()
+

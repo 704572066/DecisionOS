@@ -9,6 +9,7 @@ from app.auth.sessions import create_session, revoke_session
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.entities import User, Workspace
+from app.workspace.defaults import ensure_default_project
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -38,6 +39,7 @@ def register(body: RegisterBody, response: Response, db: Session = Depends(get_d
         workspace = Workspace(name=(body.username.strip() or email.split("@")[0]) + " 的空间", owner_user_id=user.id)
         db.add(workspace); db.flush()
         user.workspace_id = workspace.id
+        ensure_default_project(db, workspace.id)
         db.commit(); db.refresh(user); db.refresh(workspace)
     except Exception:
         db.rollback(); raise
@@ -63,3 +65,4 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)):
 @router.get("/me")
 def me(identity: CurrentIdentity = Depends(get_current_identity)):
     return public_identity(identity)
+

@@ -11,42 +11,9 @@ from app.services.context_service import analyze_meeting
 from app.services.transcript_service import append_final_segment, list_segments
 from app.auth.dependencies import CurrentIdentity, get_current_identity
 from app.auth.ownership import owned_meeting, owned_project
+from app.workspace.defaults import ensure_default_project
 
 router = APIRouter(prefix="/api")
-
-
-@router.post("/demo/seed")
-def seed_demo(db: Session = Depends(get_db), identity: CurrentIdentity = Depends(get_current_identity)):
-    workspace_id = identity.workspace.id
-    project = db.scalar(select(Project).where(Project.workspace_id == workspace_id, Project.name == "客户A企业软件采购项目"))
-    if not project:
-        project = Project(workspace_id=workspace_id, name="客户A企业软件采购项目", business_goal="在保证利润率的前提下完成签约")
-        db.add(project)
-        db.flush()
-    rows = [
-        ("document", "历史同类客户成交复盘", "去年同类型客户初始要求降价20%，最终成交折扣为8%。", "document"),
-        ("evidence", "客户A历史付款记录", "客户A过去合同平均付款周期为90天，曾出现一次逾期。", "crm"),
-        ("policy", "公司项目利润率规则", "软件项目目标毛利率不得低于18%；超过10%的折扣必须评估付款周期。", "policy"),
-        ("decision", "历史账期风险决策", "对付款周期超过120天的客户，必须增加担保或分阶段收款。", "decision"),
-    ]
-    for typ, title, content, source in rows:
-        item = db.scalar(select(KnowledgeItem).where(KnowledgeItem.workspace_id == workspace_id, KnowledgeItem.project_id == project.id, KnowledgeItem.title == title))
-        if item:
-            item.object_type=typ; item.content=content; item.source_type=source
-        else:
-            db.add(
-                KnowledgeItem(
-                    workspace_id=workspace_id,
-                    project_id=project.id,
-                    object_type=typ,
-                    title=title,
-                    content=content,
-                    source_type=source,
-                )
-            )
-    db.commit()
-    db.refresh(project)
-    return {"projectId": project.id, "message": "示例知识已导入"}
 
 
 @router.get("/projects")
@@ -68,8 +35,8 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db), identity:
 
 @router.post("/meetings")
 def create_meeting(body: MeetingCreate, db: Session = Depends(get_db), identity: CurrentIdentity = Depends(get_current_identity)):
-    owned_project(db, identity.workspace.id, body.projectId)
-    m = Meeting(workspace_id=identity.workspace.id, project_id=body.projectId, title=body.title)
+    project = owned_project(db, identity.workspace.id, body.projectId) if body.projectId else ensure_default_project(db, identity.workspace.id)
+    m = Meeting(workspace_id=identity.workspace.id, project_id=project.id, title=body.title)
     db.add(m)
     db.commit()
     db.refresh(m)
@@ -164,7 +131,7 @@ def create_decision(body: DecisionCreate, db: Session = Depends(get_db), identit
     db.add(
         KnowledgeItem(
             workspace_id=identity.workspace.id,
-            project_id=body.projectId,
+            project_id=None,
             object_type="decision",
             title=body.title,
             content=body.statement,
@@ -186,3 +153,4 @@ def create_decision(body: DecisionCreate, db: Session = Depends(get_db), identit
     db.commit()
     db.refresh(d)
     return {"decisionId": d.id, "taskId": task.id if task else None}
+

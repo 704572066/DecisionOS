@@ -22,10 +22,10 @@ def run():
     with TestClient(app) as a, TestClient(app) as b:
         ia=register(a,"a@example.com"); ib=register(b,"b@example.com")
         assert ia["workspace"]["id"]!=ib["workspace"]["id"]
-        pa=a.post("/api/projects",json={"name":"A Project","businessGoal":"A"}).json()["id"]
-        pb=b.post("/api/projects",json={"name":"B Project","businessGoal":"B"}).json()["id"]
-        ma=a.post("/api/meetings",json={"projectId":pa,"title":"A Meeting"}).json()["id"]
-        mb=b.post("/api/meetings",json={"projectId":pb,"title":"B Meeting"}).json()["id"]
+        pa=a.get("/api/projects").json()[0]["id"]
+        pb=b.get("/api/projects").json()[0]["id"]
+        ma=a.post("/api/meetings",json={"title":"A Meeting"}).json()["id"]
+        mb=b.post("/api/meetings",json={"title":"B Meeting"}).json()["id"]
         assert {x["id"] for x in a.get("/api/projects").json()}=={pa}
         assert {x["id"] for x in b.get("/api/projects").json()}=={pb}
         assert a.get(f"/api/meetings/{mb}").status_code==404
@@ -42,14 +42,11 @@ def run():
         assert "A_SECRET_MARGIN_POLICY" in serialized
         assert "B_SECRET_PAYMENT_POLICY" not in serialized
         assert a.post("/api/retrieval/search",json={"projectId":pb,"text":"B_SECRET_PAYMENT_POLICY"}).status_code==404
-        assert a.post("/api/demo/seed").status_code==200
-        assert a.post("/api/demo/seed").status_code==200
-        db=SessionLocal()
-        seeded=db.query(KnowledgeItem).filter(KnowledgeItem.workspace_id==ia["workspace"]["id"],KnowledgeItem.title=="公司项目利润率规则").all()
-        assert len(seeded)==1 and seeded[0].object_type=="policy" and seeded[0].source_type=="policy"
-        db.close()
+        empty_board=a.get(f"/api/decision-board/{ma}")
+        assert empty_board.status_code==200 and empty_board.json()["evidence"]==[]
         a.post("/api/auth/logout")
         assert a.get("/api/projects").status_code==401
     print("PHASE 3.1 PERSONAL WORKSPACE ISOLATION: OK")
 
 if __name__=="__main__": run()
+
