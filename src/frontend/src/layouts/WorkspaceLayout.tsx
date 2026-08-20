@@ -1,7 +1,7 @@
 import type {ReactNode} from 'react';
 import type {Identity} from '../types/auth';
 
-export type WorkspaceView = 'meeting' | 'history' | 'knowledge';
+export type WorkspaceView = 'home' | 'meeting' | 'history' | 'knowledge' | 'decisions' | 'settings';
 
 type WorkspaceLayoutProps = {
   identity: Identity;
@@ -15,17 +15,23 @@ type WorkspaceLayoutProps = {
 
 export function WorkspaceLayout({identity, activeView, recording, connectionState, onViewChange, onLogout, children}: WorkspaceLayoutProps) {
   const status = recording ? '正在录音' : connectionState === 'connecting' ? '正在连接' : connectionState === 'disconnected' ? '连接已断开' : '待机';
-  return <main>
-    <header className="hero">
-      <div><span className="eyebrow">Bug Fix Sprint 1.1</span><h1>DecisionOS 实时会议</h1><p>实时语音转写、企业历史检索与主动提醒。</p></div>
-      <div className={`status ${recording ? 'recording' : ''}`}><span />{status}</div>
-      <div><small>{identity.workspace.name}</small><button className="link-button" onClick={onLogout}>退出</button></div>
-    </header>
-    <nav className="workspace-nav">
-      <button className={activeView === 'meeting' ? 'active' : ''} onClick={() => onViewChange('meeting')}>当前会议</button>
-      <button className={activeView === 'history' ? 'active' : ''} onClick={() => onViewChange('history')}>历史会议</button>
-      <button className={activeView === 'knowledge' ? 'active' : ''} onClick={() => onViewChange('knowledge')}>知识库</button>
-    </nav>
-    {children}
-  </main>;
+  const meetingsActive = activeView === 'meeting' || activeView === 'history';
+  return <div className="workspace-shell">
+    <aside className="workspace-sidebar">
+      <button className="workspace-brand" onClick={() => onViewChange('home')} aria-label="返回首页"><span className="workspace-brand-mark">D</span><strong>DecisionOS</strong></button>
+      <nav className="workspace-navigation" aria-label="工作空间导航">
+        <button className={activeView === 'home' ? 'active' : ''} onClick={() => onViewChange('home')}><span>⌂</span>Home</button>
+        <button className={meetingsActive ? 'active' : ''} onClick={() => onViewChange('meeting')}><span>◉</span>Meetings</button>
+        {meetingsActive && <div className="workspace-subnav"><button className={activeView === 'meeting' ? 'active' : ''} onClick={() => onViewChange('meeting')}>Current meeting</button><button className={activeView === 'history' ? 'active' : ''} onClick={() => onViewChange('history')}>History</button></div>}
+        <button className={activeView === 'knowledge' ? 'active' : ''} onClick={() => onViewChange('knowledge')}><span>▤</span>Knowledge</button>
+        <button className={activeView === 'decisions' ? 'active' : ''} onClick={() => onViewChange('decisions')}><span>◇</span>Decisions</button>
+        <button className={activeView === 'settings' ? 'active' : ''} onClick={() => onViewChange('settings')}><span>⚙</span>Settings</button>
+      </nav>
+      <div className="workspace-sidebar-footer"><div className="workspace-avatar">{(identity.user.username || identity.user.email).slice(0, 1).toUpperCase()}</div><div><strong>{identity.user.username || identity.user.email}</strong><small>{identity.workspace.name}</small></div><button className="workspace-logout" onClick={onLogout} title="退出登录">退出</button></div>
+    </aside>
+    <div className="workspace-main">
+      <header className="workspace-topbar"><div><span className="workspace-mobile-brand">DecisionOS</span></div><div className={`status ${recording ? 'recording' : ''}`}><span />{status}</div></header>
+      <main className="workspace-content">{children}</main>
+    </div>
+  </div>;
 }

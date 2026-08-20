@@ -9,13 +9,14 @@ import {API_BASE_URL as API, fetchJson} from '../lib/api';
 import {getErrorMessage} from '../lib/errors';
 import {clearMeetingSession, loadMeetingSession, saveMeetingSession} from '../lib/meetingSession';
 import {buildWsUrl} from '../lib/websocket';
-import {WorkspaceLayout} from '../layouts/WorkspaceLayout';
+import {WorkspaceLayout, type WorkspaceView} from '../layouts/WorkspaceLayout';
 import {LoginPage} from '../pages/LoginPage';
 import {MeetingSetup} from '../components/meeting/MeetingSetup';
 import {TranscriptPanel} from '../components/meeting/TranscriptPanel';
 import {DecisionBoard as DecisionBoardView} from '../components/decision/DecisionBoard';
 import {KnowledgePage} from '../pages/KnowledgePage';
 import {MeetingHistoryPage} from '../pages/MeetingHistoryPage';
+import {WorkspacePlaceholderPage} from '../pages/WorkspacePlaceholderPage';
 
 export default function App() {
   const [identity,setIdentity]=useState<Identity|null>(null);
@@ -26,7 +27,7 @@ export default function App() {
   const [authUsername,setAuthUsername]=useState('');
   const [authMessage,setAuthMessage]=useState('');
   const [authMessageType,setAuthMessageType]=useState<'info'|'error'>('info');
-  const [activeView,setActiveView]=useState<'meeting'|'history'|'knowledge'>('meeting');
+  const [activeView,setActiveView]=useState<WorkspaceView>('home');
   const [knowledgeSources,setKnowledgeSources]=useState<KnowledgeSource[]>([]);
   const [selectedKnowledge,setSelectedKnowledge]=useState<KnowledgeSource|null>(null);
   const [knowledgeType,setKnowledgeType]=useState<KnowledgeSource['objectType']>('document');
@@ -299,7 +300,7 @@ export default function App() {
   const logout=async()=>{
     stopRecording(true);
     try{await fetch(`${API}/auth/logout`,{method:'POST',credentials:'include'});}finally{
-      clearMeetingSession(); setIdentity(null); setProjectId(''); setMeetingId(''); setDecisionBoard(null); setReminders([]); setKnowledgeSources([]); setSelectedKnowledge(null); setMeetingHistory([]); setHistoryDetail(null); setMeetingSummary(null); setDecisionMemories([]); setActiveView('meeting');
+      clearMeetingSession(); setIdentity(null); setProjectId(''); setMeetingId(''); setDecisionBoard(null); setReminders([]); setKnowledgeSources([]); setSelectedKnowledge(null); setMeetingHistory([]); setHistoryDetail(null); setMeetingSummary(null); setDecisionMemories([]); setActiveView('home');
     }
   };
 
@@ -786,7 +787,7 @@ export default function App() {
   return (
     <WorkspaceLayout identity={identity} activeView={activeView} recording={recording} connectionState={connectionState} onViewChange={setActiveView} onLogout={logout}>
 
-      {activeView==='history' ? <MeetingHistoryPage items={meetingHistory} detail={historyDetail} summary={meetingSummary} memories={decisionMemories} summaryBusy={summaryBusy} onOpen={openMeetingHistory} onGenerateSummary={generateMeetingSummary} /> : activeView==='knowledge' ? <KnowledgePage sources={knowledgeSources} selected={selectedKnowledge} type={knowledgeType} busy={knowledgeBusy} fileRef={knowledgeFileRef} message={message} messageType={messageType} onTypeChange={setKnowledgeType} onUpload={uploadKnowledge} onOpen={openKnowledge} onReprocess={reprocessKnowledge} onDelete={deleteKnowledge} /> : <>
+      {activeView==='home' ? <WorkspacePlaceholderPage eyebrow="Decision Workspace Overview" title="我的空间" description="Home 总览将在 3.4.1-B 接入当前会议、关注事项、最近会议和最近决策。" /> : activeView==='decisions' ? <WorkspacePlaceholderPage eyebrow="Decision Memory" title="决策记录" description="Decision Memory Browser 将在 3.4.1-D 接入现有跨会议决策记忆。" /> : activeView==='settings' ? <WorkspacePlaceholderPage eyebrow="Workspace" title="设置" description={`${identity.workspace.name} · ${identity.user.email}`} /> : activeView==='history' ? <MeetingHistoryPage items={meetingHistory} detail={historyDetail} summary={meetingSummary} memories={decisionMemories} summaryBusy={summaryBusy} onOpen={openMeetingHistory} onGenerateSummary={generateMeetingSummary} /> : activeView==='knowledge' ? <KnowledgePage sources={knowledgeSources} selected={selectedKnowledge} type={knowledgeType} busy={knowledgeBusy} fileRef={knowledgeFileRef} message={message} messageType={messageType} onTypeChange={setKnowledgeType} onUpload={uploadKnowledge} onOpen={openKnowledge} onReprocess={reprocessKnowledge} onDelete={deleteKnowledge} /> : <>
 
       <MeetingSetup meetingId={meetingId} recording={recording} finalizing={finalizingMeeting} asrMode={asrMode} browserSpeechSupported={browserSpeechSupported} connectionState={connectionState} onCreate={createMeeting} onFinalize={endAndFinalizeMeeting} onAsrModeChange={setAsrMode} onReconnect={startRecording} onRestore={() => restoreMeeting(meetingId).catch(error => showError(getErrorMessage(error)))} />
 
