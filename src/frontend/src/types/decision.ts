@@ -1,7 +1,9 @@
 export type DecisionMemory = {
   id: string; workspaceId?: string; sourceMeetingId: string; sourceSummaryId?: string; sourceDecisionId?: string;
   title?: string; decision: string; subject?: string; status: 'active' | 'superseded' | 'revoked';
-  confidence?: number; sourceIds?: string[]; evidence?: unknown[]; effectiveAt?: string; createdAt?: string;
+  confidence?: number; sourceIds?: string[];
+  evidence?: Array<{sourceId?: string; sourceType?: string; text?: string; title?: string; summary?: string}>;
+  attributes?: Record<string, unknown>; effectiveAt?: string; createdAt?: string;
   supersedesId: string | null;
 };
 

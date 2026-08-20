@@ -19,6 +19,7 @@ import {MeetingHistoryPage} from '../pages/MeetingHistoryPage';
 import {WorkspacePlaceholderPage} from '../pages/WorkspacePlaceholderPage';
 import {HomePage} from '../pages/HomePage';
 import {MeetingsPage} from '../pages/MeetingsPage';
+import {DecisionsPage} from '../pages/DecisionsPage';
 
 export default function App() {
   const [identity,setIdentity]=useState<Identity|null>(null);
@@ -44,6 +45,7 @@ export default function App() {
   const [homeLoading,setHomeLoading]=useState(false);
   const [meetingsLoading,setMeetingsLoading]=useState(false);
   const [meetingCreating,setMeetingCreating]=useState(false);
+  const [decisionsLoading,setDecisionsLoading]=useState(false);
   const storedSession = useMemo(() => loadMeetingSession(), []);
   const [projectId, setProjectId] = useState(storedSession?.projectId || '');
   const [meetingId, setMeetingId] = useState(storedSession?.meetingId || '');
@@ -324,6 +326,17 @@ export default function App() {
       }
     }).catch(error=>showError(`加载工作空间总览失败：${getErrorMessage(error)}`)).finally(()=>{
       if(mountedRef.current&&workspaceIdRef.current===workspaceId) setHomeLoading(false);
+    });
+  },[identity,activeView]);
+
+  useEffect(()=>{
+    if(!identity || activeView!=='decisions') return;
+    const workspaceId=identity.workspace.id;
+    setDecisionsLoading(true);
+    fetchJson<DecisionMemory[]>(`${API}/decision-memories`).then(memories=>{
+      if(mountedRef.current&&workspaceIdRef.current===workspaceId) setDecisionMemories(memories);
+    }).catch(error=>showError(`加载决策记忆失败：${getErrorMessage(error)}`)).finally(()=>{
+      if(mountedRef.current&&workspaceIdRef.current===workspaceId) setDecisionsLoading(false);
     });
   },[identity,activeView]);
 
@@ -830,7 +843,7 @@ export default function App() {
   return (
     <WorkspaceLayout identity={identity} activeView={activeView} recording={recording} connectionState={connectionState} onViewChange={setActiveView} onLogout={logout}>
 
-      {activeView==='home' ? <HomePage identity={identity} currentMeeting={currentMeeting} transcriptCount={finalTranscript ? finalTranscript.split('\n').filter(Boolean).length : 0} board={decisionBoard} recentMeetings={meetingHistory} recentDecisions={decisionMemories} loading={homeLoading} onStartMeeting={() => createMeeting().then(created => {if(created) setActiveView('meeting');})} onContinueMeeting={() => setActiveView('meeting')} onOpenAttention={() => setActiveView('meeting')} onOpenMeeting={(id) => {setActiveView('history'); openMeetingHistory(id);}} onViewMeetings={() => setActiveView('meetings')} onViewDecisions={() => setActiveView('decisions')} /> : activeView==='meetings' ? <MeetingsPage currentMeeting={currentMeeting} transcriptCount={finalTranscript ? finalTranscript.split('\n').filter(Boolean).length : 0} history={meetingHistory} loading={meetingsLoading} creating={meetingCreating} onStart={() => createMeeting().then(created => {if(created) setActiveView('meeting');})} onContinue={() => setActiveView('meeting')} onOpenHistory={(id) => {setActiveView('history'); openMeetingHistory(id);}} onViewAllHistory={() => setActiveView('history')} /> : activeView==='decisions' ? <WorkspacePlaceholderPage eyebrow="Decision Memory" title="决策记录" description="Decision Memory Browser 将在 3.4.1-D 接入现有跨会议决策记忆。" /> : activeView==='settings' ? <WorkspacePlaceholderPage eyebrow="Workspace" title="设置" description={`${identity.workspace.name} · ${identity.user.email}`} /> : activeView==='history' ? <MeetingHistoryPage items={meetingHistory} detail={historyDetail} summary={meetingSummary} memories={decisionMemories} summaryBusy={summaryBusy} onOpen={openMeetingHistory} onGenerateSummary={generateMeetingSummary} /> : activeView==='knowledge' ? <KnowledgePage sources={knowledgeSources} selected={selectedKnowledge} type={knowledgeType} busy={knowledgeBusy} fileRef={knowledgeFileRef} message={message} messageType={messageType} onTypeChange={setKnowledgeType} onUpload={uploadKnowledge} onOpen={openKnowledge} onReprocess={reprocessKnowledge} onDelete={deleteKnowledge} /> : <>
+      {activeView==='home' ? <HomePage identity={identity} currentMeeting={currentMeeting} transcriptCount={finalTranscript ? finalTranscript.split('\n').filter(Boolean).length : 0} board={decisionBoard} recentMeetings={meetingHistory} recentDecisions={decisionMemories} loading={homeLoading} onStartMeeting={() => createMeeting().then(created => {if(created) setActiveView('meeting');})} onContinueMeeting={() => setActiveView('meeting')} onOpenAttention={() => setActiveView('meeting')} onOpenMeeting={(id) => {setActiveView('history'); openMeetingHistory(id);}} onViewMeetings={() => setActiveView('meetings')} onViewDecisions={() => setActiveView('decisions')} /> : activeView==='meetings' ? <MeetingsPage currentMeeting={currentMeeting} transcriptCount={finalTranscript ? finalTranscript.split('\n').filter(Boolean).length : 0} history={meetingHistory} loading={meetingsLoading} creating={meetingCreating} onStart={() => createMeeting().then(created => {if(created) setActiveView('meeting');})} onContinue={() => setActiveView('meeting')} onOpenHistory={(id) => {setActiveView('history'); openMeetingHistory(id);}} onViewAllHistory={() => setActiveView('history')} /> : activeView==='decisions' ? <DecisionsPage memories={decisionMemories} loading={decisionsLoading} onOpenSourceMeeting={(id) => {setActiveView('history'); openMeetingHistory(id);}} /> : activeView==='settings' ? <WorkspacePlaceholderPage eyebrow="Workspace" title="设置" description={`${identity.workspace.name} · ${identity.user.email}`} /> : activeView==='history' ? <MeetingHistoryPage items={meetingHistory} detail={historyDetail} summary={meetingSummary} memories={decisionMemories} summaryBusy={summaryBusy} onOpen={openMeetingHistory} onGenerateSummary={generateMeetingSummary} /> : activeView==='knowledge' ? <KnowledgePage sources={knowledgeSources} selected={selectedKnowledge} type={knowledgeType} busy={knowledgeBusy} fileRef={knowledgeFileRef} message={message} messageType={messageType} onTypeChange={setKnowledgeType} onUpload={uploadKnowledge} onOpen={openKnowledge} onReprocess={reprocessKnowledge} onDelete={deleteKnowledge} /> : <>
 
       <MeetingSetup meetingId={meetingId} recording={recording} finalizing={finalizingMeeting} asrMode={asrMode} browserSpeechSupported={browserSpeechSupported} connectionState={connectionState} onCreate={createMeeting} onFinalize={endAndFinalizeMeeting} onAsrModeChange={setAsrMode} onReconnect={startRecording} onRestore={() => restoreMeeting(meetingId).catch(error => showError(getErrorMessage(error)))} />
 
